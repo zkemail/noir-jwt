@@ -11,8 +11,10 @@
 
 In your Nargo.toml file, add `jwt` as a dependency with the version you want to install:
 
+```toml
 [dependencies]
 jwt = { tag = "v0.1.0", git = "https://github.com/saleel/noir-jwt" }
+```
 
 ## Usage
 
@@ -41,7 +43,7 @@ fn main(
 }
 ```
 
-### With partial hash
+#### With partial hash
 
 ```noir
 use dep::jwt::JWT;
