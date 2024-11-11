@@ -74,6 +74,10 @@ fn main(
 }
 ```
 
+## Input generation from JS
+
+A JS SDK will be released soon to generate the inputs for Noir. In the meantime, refer to this [example](https://github.com/saleel/stealthnote/blob/main/app/lib/utils.ts#L514-L534).
+
 ## Limitation
 
 Partial hash is not fully supported yet due to a limitation in the base64 lib. It currently works using a hack where it assumes the data you want to retrieve is within `MAX_LENGTH - 64` bytes of the data. This will be fixed in a future release.
