@@ -1,18 +1,13 @@
 use dep::std::hash::sha256_var;
-use dep::noir_rsa::bignum::BigNum;
-use dep::noir_rsa::bignum::runtime_bignum::BigNumInstance;
-use dep::noir_rsa::bignum::fields::Params2048;
-use dep::noir_rsa::types::RSA;
-use dep::string_search::{SubString, StringBody, SubString32, SubString64, StringBody256};
-use dep::noir_base64::base64_decode;
+use dep::bignum::{params::BigNumParams, RuntimeBigNum};
+use dep::rsa::{rsa::verify_sha256_pkcs1v15, types::RBN2048};
+use dep::string_search::{SubString, StringBody};
+use dep::base64::{BASE64_URL_DECODER};
 use dep::zkemail::partial_hash::partial_sha256_var_end;
-
-type BN2048 = BigNum<18, Params2048>;
-type RSA2048 = RSA<BN2048, BigNumInstance<18, Params2048>, 256>;
 
 /**
  * @brief Struct representing a JWT. Use the init functions to create an instance
- *        Currently only supports RSA 2048/SHA256 signature
+ *        Currently only supports RSA 2048/SHA256 signatures
  **/
 pub struct JWT<let DATA_LENGTH: u32> {
     data: BoundedVec<u8, DATA_LENGTH>,
@@ -47,7 +42,9 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
         assert(data.len() < DATA_LENGTH, "data length is too long");
 
         // Decode base64 and prepare a haystack for substring matching in validate_key_value()
-        let payload: [u8; (DATA_LENGTH + 3) / 4 * 3] = base64_decode(data.storage);
+        let payload: [u8; (DATA_LENGTH + 3) / 4 * 3] = BASE64_URL_DECODER.decode(data.storage);
+
+        // StringBody is constructed with <ceil(length / 31) * 31, ceil(length / 31), length>
         let haystack: StringBody<((DATA_LENGTH + 31) / 31) * 31, (DATA_LENGTH + 31) / 31, DATA_LENGTH> =
             StringBody::new(payload, payload.len());
 
@@ -88,12 +85,13 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
         assert(partial_data.len() < DATA_LENGTH, "partial_data length is too long");
 
         // Decode base64 and prepare a haystack for substring matching in validate_key_value()
-        let mut payload_b64: [u8; DATA_LENGTH] = [0; DATA_LENGTH];
         // Apply the offset to the partial data to make the partial base64 chunk decodable (multiple of 4)
-        for i in 0..DATA_LENGTH {
+        // TODO: `DATA_LENGTH - 32 is` arbitrary, this should be replaced with _var version of base64 when ready
+        let mut payload_b64: [u8; (DATA_LENGTH - 32)] = [0; (DATA_LENGTH - 32)];
+        for i in 0..(DATA_LENGTH - 32) {
             payload_b64[i] = partial_data.storage[i + b64_offset];
         }
-        let payload: [u8; (DATA_LENGTH + 3) / 4 * 3] = base64_decode(payload_b64);
+        let payload: [u8; ((DATA_LENGTH - 32) + 3) / 4 * 3] = BASE64_URL_DECODER.decode(payload_b64); // b64 decoded length is ceil(DATA_LENGTH / 3) * 4
         let haystack: StringBody<((DATA_LENGTH + 31) / 31) * 31, (DATA_LENGTH + 31) / 31, DATA_LENGTH> =
             StringBody::new(payload, payload.len());
 
@@ -130,14 +128,12 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
         }
 
         // Verify RSA signature
-        let rsa: RSA2048 = RSA {};
-        let signature: BN2048 = BigNum::from_array(self.signature_limbs);
-        let pubkey: BigNumInstance<18, Params2048> =
-            BigNumInstance::new(self.pubkey_modulus_limbs, self.redc_params_limbs);
-        assert(
-            rsa.verify_sha256_pkcs1v15(pubkey, data_hash, signature, 65537),
-            "RSA signature verification failed",
-        );
+        let params: BigNumParams<18, 2048> =
+            BigNumParams::new(false, self.pubkey_modulus_limbs, self.redc_params_limbs);
+
+        let signature: RBN2048 = RuntimeBigNum::from_array(params, self.signature_limbs);
+
+        assert(verify_sha256_pkcs1v15(data_hash, signature, 65537));
     }
 
     /**
@@ -151,20 +147,27 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
         assert(value.len() < MAX_VALUE_LENGTH, "value length is too long");
 
         // Search for "$key":"$value and assert the character after match is a `"`
-        let mut prefix: [u8; KEY_LENGTH + 3] = [0; KEY_LENGTH + 3];
-        prefix[0] = 34; // "
+        // json_key = "$key":
+        let mut json_key: [u8; KEY_LENGTH + 3] = [0; KEY_LENGTH + 3]; // +3 is for two quotes and a colon
+        json_key[0] = 34; // "
         for i in 0..KEY_LENGTH {
-            prefix[i + 1] = key[i];
+            json_key[i + 1] = key[i];
         }
-        prefix[KEY_LENGTH] = 34; // "
-        prefix[KEY_LENGTH + 1] = 58; // :
-        let value_substring: SubString64 = SubString::new(value.storage, value.len());
+        json_key[KEY_LENGTH] = 34; // "
+        json_key[KEY_LENGTH + 1] = 58; // :
+        // SubString is constructed with <ceil(length / 31) * 31, length / 31, length>
+        // length = KEY_LENGTH + 3
+        let json_key_substring: SubString<((KEY_LENGTH + 3 + 31) / 31) * 31, (KEY_LENGTH + 3) / 31, KEY_LENGTH + 3> =
+            SubString::new(json_key, json_key.len());
+        // length = KEY_LENGTH + 3 + MAX_VALUE_LENGTH
+        let value_substring: SubString<((KEY_LENGTH + 3 + MAX_VALUE_LENGTH + 31) / 31) * 31, (KEY_LENGTH + 3 + MAX_VALUE_LENGTH) / 31, KEY_LENGTH + 3 + MAX_VALUE_LENGTH> =
+            SubString::new(value.storage, value.len());
 
-        let mut needle: SubString32 = SubString::new(prefix, prefix.len());
-        let needle = needle.concat_into(value_substring);
+        // Concatenate json_key_substring and value_substring to form the search term
+        let needle = json_key_substring.concat_into(value_substring);
 
         let (match, position): (bool, u32) = self.haystack.substring_match(needle);
-        assert(match, "key/value pair not found");
+        assert(match, "key value pair not found");
 
         // Assert the value after search term is a `"`
         assert(self.data.storage[position + needle.len()] == 34, "incorrect value");
