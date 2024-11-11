@@ -73,3 +73,7 @@ fn main(
     jwt.validate_key_value("nonce".as_bytes(), nonce);
 }
 ```
+
+## Limitation
+
+Partial hash is not fully supported yet due to a limitation in the base64 lib. It currently works using a hack where it assumes the data you want to retrieve is within `MAX_LENGTH - 64` bytes of the data. This will be fixed in a future release.
