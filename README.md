@@ -25,6 +25,9 @@ Assusming you installed the latest version, you can use it in your Noir program 
 ```noir
 use dep::jwt::JWT;
 
+global MAX_DATA_LENGTH: u32 = 900;
+global MAX_NONCE_LENGTH: u32 = 32;
+
 fn main(
     data: BoundedVec<u8, MAX_DATA_LENGTH>,
     b64_offset: u32,
@@ -32,7 +35,7 @@ fn main(
     redc_params_limbs: [Field; 18],
     signature_limbs: [Field; 18],
     domain: pub BoundedVec<u8, MAX_DOMAIN_LENGTH>,
-    nonce: pub BoundedVec<u8, NONCE_LENGTH>,
+    nonce: pub BoundedVec<u8, MAX_NONCE_LENGTH>,
 ) {
     let jwt = JWT::init(
         data,
@@ -45,7 +48,7 @@ fn main(
     jwt.verify();
 
     // Validate key value pair in payload JSON
-    jwt.validate_key_value::<300, 5, NONCE_LENGTH>("nonce".as_bytes(), nonce);
+    jwt.validate_key_value::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
 }
 ```
 
@@ -53,6 +56,9 @@ fn main(
 
 ```noir
 use dep::jwt::JWT;
+
+global MAX_PARTIAL_DATA_LENGTH: u32 = 640; // Data after partial SHA
+global MAX_NONCE_LENGTH: u32 = 32;
 
 fn main(
     partial_data: BoundedVec<u8, MAX_PARTIAL_DATA_LENGTH>,
@@ -62,7 +68,7 @@ fn main(
     pubkey_modulus_limbs: pub [Field; 18],
     redc_params_limbs: [Field; 18],
     signature_limbs: [Field; 18],
-    nonce: pub BoundedVec<u8, NONCE_LENGTH>,
+    nonce: pub BoundedVec<u8, MAX_NONCE_LENGTH>,
 ) {
     let jwt = JWT::init_with_partial_hash(
         partial_data,
@@ -77,7 +83,7 @@ fn main(
     jwt.verify();
 
     // Validate key value pair in payload JSON
-    jwt.validate_key_value::<300, 5, NONCE_LENGTH>("nonce".as_bytes(), nonce);
+    jwt.validate_key_value::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
 }
 ```
 
