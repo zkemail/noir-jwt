@@ -116,31 +116,32 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
     /**
     * @brief Checks if a key-value pair exists in the JWT payload
     *
-    * RANGE is the index in the data up to which we will look for the key:value pair.
-    * It is also required that the every byte up to RANGE should be a valid character after base64 decode.
+    * PAYLOAD_RANGE is the index in the base64 encoded payload (from the b64_offset) up to which we will look for the key:value pair.
+    * This essentially means that everything from b64_offset to PAYLOAD_RANGE should be a valid base64 character, and the key:value
+    * pair should be present in this range.
     * This is necessary now due to a limitation in base64.
     **/
-    pub fn validate_key_value<let RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    pub fn validate_key_value<let PAYLOAD_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
         self,
         key: [u8; KEY_LENGTH],
         value: BoundedVec<u8, MAX_VALUE_LENGTH>,
     ) {
-        assert(RANGE % 3 == 0, "range should be a multiple of 3");
-        assert(RANGE <= self.data.len(), "range should be less than data length");
+        assert(PAYLOAD_RANGE % 4 == 0, "PAYLOAD_RANGE should be a multiple of 4 to be a valid base64 chunk");
+        assert(PAYLOAD_RANGE <= (self.data.len() - self.b64_offset), "PAYLOAD_RANGE should be less than data length");
         assert(value.len() <= MAX_VALUE_LENGTH, "value length is too long");
 
         // Prepare base64 payload to decode
         // Only in partial sha - shift input chars by offset so the partial data is base64 decodable (multiple of 4)
-        let mut payload_b64: [u8; RANGE / 3 * 4] = [0; RANGE / 3 * 4];
-        for i in 0..RANGE / 3 * 4 {
+        let mut payload_b64: [u8; PAYLOAD_RANGE] = [0; PAYLOAD_RANGE];
+        for i in 0..PAYLOAD_RANGE {
             payload_b64[i] = self.data.storage()[(i + self.b64_offset)];
         }
 
         // Decode base64 and prepare a haystack for substring matching in validate_key_value() with decoded payload
-        let payload: [u8; RANGE] = BASE64_URL_DECODER.decode(payload_b64); // b64 decoded length is ceil(DATA_LENGTH / 3) * 4
+        let payload: [u8; (PAYLOAD_RANGE / 4 * 3)] = BASE64_URL_DECODER.decode(payload_b64); // b64 decoded length is ceil(DATA_LENGTH / 3) * 4
 
         // StringBody is constructed with <ceil(length / 31) * 31, ceil(length / 31), length>
-        let haystack: StringBody<((RANGE + 31) / 31) * 31, (RANGE + 31) / 31, RANGE> =
+        let haystack: StringBody<(((PAYLOAD_RANGE / 4 * 3) + 31) / 31) * 31, ((PAYLOAD_RANGE / 4 * 3) + 31) / 31, (PAYLOAD_RANGE / 4 * 3)> =
             StringBody::new(payload, payload.len());
 
         // Search for "$key":"$value and assert the character after match is a `"`
