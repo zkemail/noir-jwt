@@ -23,7 +23,7 @@ jwt = { tag = "v0.1.0", git = "https://github.com/saleel/noir-jwt" }
 Assusming you installed the latest version, you can use it in your Noir program like this:
 
 ```noir
-use dep::jwt::JWT;
+use jwt::JWT;
 
 global MAX_DATA_LENGTH: u32 = 900;
 global MAX_NONCE_LENGTH: u32 = 32;
@@ -55,7 +55,7 @@ fn main(
 #### With partial hash
 
 ```noir
-use dep::jwt::JWT;
+use jwt::JWT;
 
 global MAX_PARTIAL_DATA_LENGTH: u32 = 640; // Data after partial SHA
 global MAX_NONCE_LENGTH: u32 = 32;
