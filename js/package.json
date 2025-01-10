@@ -1,0 +1,21 @@
+{
+  "name": "js",
+  "type": "module",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "test.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@zk-email/helpers": "^6.3.2",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}
