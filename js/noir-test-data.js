@@ -2,11 +2,69 @@ import crypto from "crypto";
 import jsonwebtoken from "jsonwebtoken";
 import { generateInputs } from "./generate-inputs.js";
 
+// const key =  crypto.generateKeyPairSync("rsa", {
+//   modulusLength: 2048,
+//   publicExponent: 65537,
+// });
+
+// console.log(key.privateKey.export({ type: "pkcs8", format: "pem" }));
+// console.log(key.publicKey.export({ type: "spki", format: "pem" }));
+
+const privateKeyPem = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCjm55on1OLp1Ur
+4B/N4+OKz6YL22jpjUmJzC81ghS4YQg8pb+DjUR734F6LGXLHqBuLvP5cjq5zRv3
+uLWfrhj/FGDKdkk5QGRcHbF6bbwlFnfv4BpojF5Dg7SiPBa+12pva3gB99nvoT/r
+q1nTGGP57DaAO7EtiFIOl+hGzPK3B3byk1xek8m4BQ9mEC/ZDrCHlDyn9wcWEsNu
+vV8qlFeLbKmcWSDScKJHEFeYlyWAZGxr56hvEgA9hqomJ61VDHzqBG7kI4PYolzO
+vORKnhsYTFminBnndABfnifxSFVCg+FFhLioBaAyZ452hIRX7ASQXV4L9w7ayZpI
+4uNJ508fAgMBAAECggEAEc842S6uy371mIcXLzRlapDcBGJn8zR8EtH1OZ/lXYTC
+fseUJ1/TWqCj2YbHteqpkBTwXfD/T4ZySu8CZlVvRyUSvDdQFTlbM2PQFAGp/2eI
+usXsWgEdqb/Gg/qCh1evsF1EfQJb6Ofmq2LFrmLzTxtVe3QD/27db9U9ZaedrCqp
+S6Ar7abI3Zo3bc+N6PKJEnN9Du+kj9nofi2dVjrlr/RFE+zx+7yq0aO+IpmRIP34
+WOvRzTGOWtvBYAWmy4F8E4RsDJuV/coQJZ67udu9uhbzedIlZpnpjEdGdLSFwiO0
+LPKr3BW/iNmE4kBfnWPO2XeKrz+tld7a4Q2hrvEDEQKBgQDNp3wJB+KrEb5G3io5
+mpZfLBaf1R4NE9c2QfstdiBJ3DdqjhBgpSaAQ5mKcspnqy0G1chk8UYaP++nIrZT
+8+6iPDHBd8vBwW4xjsWsQ+mjJ0oxPqTLjw7YRf3vPpHK99IzROG/t7/Yb99SMnNt
+9oabx1UYsUqJo/9I72H2DsRQLQKBgQDLqQ5MdIWuUTEAFD4/bi4uAvq5OpmxwWiJ
+zHDTVZD6tPN4CIq1rJWdKHoJ/tcDpOBdX22cBJoI/70vOyuh0xNkFKZpWWislRWr
+Xm+ZUt74fFwHNJywkfqAp/xrFKSCcfiTfxAtBAXraFo9taHHTKz0VImFfMBMdgDD
+dzKZq9xf+wKBgQC/1aSZE/b3loSEvMZsl2v/eTPdgkIW9tQA88lmndL+suIqjjxu
+un9QlD5MbEmsLHvC7XaR2pKG9+8IXBPx+hA226maC7JQmau9pK11xJ/TJlpJ12KH
+03mIermmCxqaV1OHqZBfcvsM3UZW+WK9R4JHG8igUPjzrbv7f/lEOoAbPQKBgDw3
+GtwuI4xbwyIj2hfFCvBdvyXfFqxA5BjCEqXZickmkUnvNJvskDvsSNEFwSr5p8DT
+w0O69JQukRAS7Z6mGvifRmiln9ZPKh4GCPcLUpOjqU4UFzP5pVg+0toSO2W6LuXl
+TrIQm3Nz4iKWvmN/3y9Kg3KtZOn2hdlFN/fJoZnbAoGBAJaTIliqJIvO5+L3auyZ
+abJ8id/nLZxAYpdCvzj1OaBHHjdrnwICTes8QNvcgcNIKdOkNjPVoGjTKXTdyBZJ
+g220hxOl6PTarDEwxCAxkWEZkN/mGITN4SkLyAQe5CMKGQWczx9rsnhlcj37YLJX
+KkhEi0T+msAtTMLLYFeKaEGD
+-----END PRIVATE KEY-----`;
+
+const publicKeyPem = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAo5ueaJ9Ti6dVK+AfzePj
+is+mC9to6Y1JicwvNYIUuGEIPKW/g41Ee9+Beixlyx6gbi7z+XI6uc0b97i1n64Y
+/xRgynZJOUBkXB2xem28JRZ37+AaaIxeQ4O0ojwWvtdqb2t4AffZ76E/66tZ0xhj
++ew2gDuxLYhSDpfoRszytwd28pNcXpPJuAUPZhAv2Q6wh5Q8p/cHFhLDbr1fKpRX
+i2ypnFkg0nCiRxBXmJclgGRsa+eobxIAPYaqJietVQx86gRu5COD2KJczrzkSp4b
+GExZopwZ53QAX54n8UhVQoPhRYS4qAWgMmeOdoSEV+wEkF1eC/cO2smaSOLjSedP
+HwIDAQAB
+-----END PUBLIC KEY-----`;
+
+
+const nonce = "123123123";
+const email = "alice@test.com";
+
 export async function createKeyAndSignData() {
   // Generate a key pair using RSASSA-PKCS1-v1_5
-  const key = await crypto.generateKeyPairSync("rsa", {
-    modulusLength: 2048,
-    publicExponent: 65537,
+  const privateKey = crypto.createPrivateKey({
+    key: privateKeyPem,
+    type: "pkcs8",
+    format: "pem",
+  });
+
+  const publicKey = crypto.createPublicKey({
+    key: publicKeyPem,
+    type: "spki",
+    format: "pem",
   });
 
   // Sample payload
@@ -16,24 +74,23 @@ export async function createKeyAndSignData() {
     aud: "123123123.456456456",
     exp: Math.floor(Date.now() / 1000) + 60 * 60,
     iat: Math.floor(Date.now() / 1000),
-    nonce: Math.random().toString(36).substring(2, 15), // Random nonce
-    email: "alice@test.com",
+    nonce,
+    email,
     email_verified: true,
   };
 
   // Sign the payload
-  const signature = jsonwebtoken.sign(payload, key.privateKey, {
+  const signature = jsonwebtoken.sign(payload, privateKey, {
     algorithm: "RS256",
   });
 
   // Verify the signature
-  jsonwebtoken.verify(signature, key.publicKey);
+  jsonwebtoken.verify(signature, publicKey);
 
   // Convert public key to JWK
-  const spkiKey = key.publicKey.export({ type: "spki", format: "der" });
   const pubkeyJwk = await globalThis.crypto.subtle.importKey(
     "spki",
-    spkiKey,
+    publicKey.export({ type: "spki", format: "der" }),
     {
       name: "RSASSA-PKCS1-v1_5",
       hash: "SHA-256",
