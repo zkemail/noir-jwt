@@ -123,91 +123,56 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
     * pair should be present in this range.
     * This is necessary now due to a limitation in base64.
     **/
-    pub fn validate_key_value<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    pub fn validate_field<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
         self,
         key: [u8; KEY_LENGTH],
         value: BoundedVec<u8, MAX_VALUE_LENGTH>,
     ) {
-        assert(
-            PAYLOAD_SCAN_RANGE % 4 == 0,
-            "PAYLOAD_SCAN_RANGE should be a multiple of 4 to be a valid base64 chunk",
-        );
-        assert(
-            PAYLOAD_SCAN_RANGE <= (self.data.len() - self.b64_offset),
-            "PAYLOAD_SCAN_RANGE should be less than data length",
-        );
-        assert(value.len() <= MAX_VALUE_LENGTH, "value length is too long");
-
-        // Prepare base64 payload to decode
-        // Only in partial sha - shift input chars by offset so the partial data is base64 decodable (multiple of 4)
-        let mut payload_b64: [u8; PAYLOAD_SCAN_RANGE] = [0; PAYLOAD_SCAN_RANGE];
-        for i in 0..PAYLOAD_SCAN_RANGE {
-            payload_b64[i] = self.data.storage()[(i + self.b64_offset)];
-        }
-
-        // Decode base64 and prepare a haystack for substring matching in validate_key_value() with decoded payload
-        let payload: [u8; (PAYLOAD_SCAN_RANGE / 4 * 3)] = BASE64_URL_DECODER.decode(payload_b64); // b64 decoded length is ceil(DATA_LENGTH / 3) * 4
-
-        // StringBody is constructed with <ceil(length / 31) * 31, ceil(length / 31), length>
-        let haystack: StringBody<(((PAYLOAD_SCAN_RANGE / 4 * 3) + 31) / 31) * 31, ((PAYLOAD_SCAN_RANGE / 4 * 3) + 31) / 31, (PAYLOAD_SCAN_RANGE / 4 * 3)> =
-            StringBody::new(payload, payload.len());
-
-        // Search for "$key":"$value and assert the character after match is a `"`
-        // json_key = "$key":"
-        let mut json_key: [u8; KEY_LENGTH + 4] = [0; KEY_LENGTH + 4]; // +4 is for two quotes and two colon
-        json_key[0] = 34; // "
-        for i in 0..KEY_LENGTH {
-            json_key[i + 1] = key[i];
-        }
-        json_key[KEY_LENGTH + 1] = 34; // "
-        json_key[KEY_LENGTH + 2] = 58; // :
-        json_key[KEY_LENGTH + 3] = 34; // "
-
-        // SubString is constructed with <ceil(length / 31) * 31, length / 31, length>
-        // length = KEY_LENGTH + 3
-        let json_key_substring: SubString<((KEY_LENGTH + 4 + 31) / 31) * 31, (KEY_LENGTH + 4) / 31, KEY_LENGTH + 4> =
-            SubString::new(json_key, json_key.len());
-
-        // value length = KEY_LENGTH + 3 + MAX_VALUE_LENGTH
-        let value_substring: SubString<((KEY_LENGTH + 4 + MAX_VALUE_LENGTH + 31) / 31) * 31, (KEY_LENGTH + 4 + MAX_VALUE_LENGTH) / 31, KEY_LENGTH + 4 + MAX_VALUE_LENGTH> =
-            SubString::new(value.storage(), value.len());
-
-        // Concatenate json_key_substring and value_substring to form the search term
-        let needle = json_key_substring.concat_into(value_substring);
-
-        let (match, position): (bool, u32) = haystack.substring_match(needle);
-        assert(match, "key value pair not found");
-
-        // Assert the value after search term is a `"`
-        assert(payload[position + needle.len()] == 34, "incorrect value");
+        let value: BoundedVec<u8, MAX_VALUE_LENGTH> = self.get_field::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(key);
+        assert(value == value, "incorrect value for claim");
     }
 
-    pub fn get_value<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    pub fn get_field<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
         self,
         key: [u8; KEY_LENGTH],
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
-        assert(
-            PAYLOAD_SCAN_RANGE % 4 == 0,
-            "PAYLOAD_SCAN_RANGE should be a multiple of 4 to be a valid base64 chunk",
-        );
-        assert(
-            PAYLOAD_SCAN_RANGE <= (self.data.len() - self.b64_offset),
-            "PAYLOAD_SCAN_RANGE should be less than data length",
-        );
-
         let value: BoundedVec<u8, MAX_VALUE_LENGTH> = unsafe {
-            self.get_value_unconstrained::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(key)
+            self.get_field_unconstrained::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(key)
         };
 
-        self.validate_key_value::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(key, value);
+        // self.validate_field::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(key, value);
+
+        let mut substring: [u8; (KEY_LENGTH + MAX_VALUE_LENGTH + 5)] = [0; (KEY_LENGTH + MAX_VALUE_LENGTH + 5)];
+        substring[0] = 34; // "
+        for i in 0..KEY_LENGTH {
+            substring[i + 1] = key[i];
+        }
+        substring[KEY_LENGTH + 1] = 34; // "
+        substring[KEY_LENGTH + 2] = 58; // :
+        substring[KEY_LENGTH + 3] = 34; // "
+        for i in 0..MAX_VALUE_LENGTH {
+            if i < value.len() {
+                substring[KEY_LENGTH + 4 + i] = value.storage()[i];
+            }
+        }
+        substring[KEY_LENGTH + value.len() + 4] = 34; // "
 
         value
     }
 
-    pub unconstrained fn get_value_unconstrained<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    pub unconstrained fn get_field_unconstrained<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
         self,
         key: [u8; KEY_LENGTH],
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
+        assert(
+            PAYLOAD_SCAN_RANGE % 4 == 0,
+            "PAYLOAD_SCAN_RANGE should be a multiple of 4 to be a valid base64 chunk",
+        );
+        assert(
+            PAYLOAD_SCAN_RANGE <= (self.data.len() - self.b64_offset),
+            "PAYLOAD_SCAN_RANGE should be less than data length",
+        );
+
         let mut payload_b64: [u8; PAYLOAD_SCAN_RANGE] = [0; PAYLOAD_SCAN_RANGE];
         for i in 0..PAYLOAD_SCAN_RANGE {
             payload_b64[i] = self.data.storage()[(i + self.b64_offset)];
@@ -424,7 +389,7 @@ fn test_verify_partial_hash() {
 }
 
 #[test]
-fn test_validate_key_value() {
+fn test_validate_field() {
     let pubkey_modulus_limbs = [
         484791102317025465533947056954494751,
         689128460766062759582134715581990032,
@@ -513,11 +478,11 @@ fn test_validate_key_value() {
     jwt.verify();
 
     let value: BoundedVec<u8, 100> = BoundedVec::from_array("alice@test.com".as_bytes());
-    jwt.validate_key_value::<220, 5, 100>("email".as_bytes(), value);
+    jwt.validate_field::<220, 5, 100>("email".as_bytes(), value);
 }
 
 #[test]
-fn test_get_value() {
+fn test_get_field() {
     let pubkey_modulus_limbs = [
         484791102317025465533947056954494751,
         689128460766062759582134715581990032,
@@ -605,7 +570,7 @@ fn test_get_value() {
 
     jwt.verify();
 
-    let email: BoundedVec<u8, 100> = jwt.get_value::<220, 5, 100>("email".as_bytes());
+    let email: BoundedVec<u8, 100> = jwt.get_field::<220, 5, 100>("email".as_bytes());
     let expected_email: BoundedVec<u8, 100> = BoundedVec::from_array("alice@test.com".as_bytes());
     assert(email == expected_email);
 }
