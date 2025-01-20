@@ -48,7 +48,7 @@ fn main(
     jwt.verify();
 
     // Validate key value pair in payload JSON
-    jwt.validate_key_value::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
+    jwt.assert_claim::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
 }
 ```
 
@@ -83,7 +83,7 @@ fn main(
     jwt.verify();
 
     // Validate key value pair in payload JSON
-    jwt.validate_key_value::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
+    jwt.assert_claim::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
 }
 ```
 
@@ -93,7 +93,7 @@ fn main(
 - `300` in the above example is the `PAYLOAD_RANGE`, which is the index in the base64 encoded payload (from the b64_offset) up to which we will look for the key:value pair.
     - This essentially means that everything from `b64_offset` to `PAYLOAD_RANGE` should be a valid base64 character of the payload, and the key:value pair should be present in this range.
     - `PAYLOAD_RANGE` should be a multiple of 4 to be a valid base64 chunk.
-- If you are want to verify multiple claims, it is better to use the same `PAYLOAD_RANGE` (maximum needed) for all `validate_key_value` calls as the compiler will optimize them.
+- If you are want to verify multiple claims, it is better to use the same `PAYLOAD_RANGE` (maximum needed) for all `assert_claim` calls as the compiler will optimize them.
 
 ## Input generation from JS
 
@@ -102,7 +102,7 @@ A JS SDK will be released soon to generate the inputs for Noir. In the meantime,
 
 ## Limitation
 
-Base64 does not support variable length in put now. Due to this you need to specify a `PAYLOAD_RANGE` when calling `validate_key_value` which should always contain valid base64 characters of the payload (no padding characters). This makes it difficult to verify key/value if they are the last key in the payload - as you might not know the exact length of the payload in advance.
+Base64 does not support variable length in put now. Due to this you need to specify a `PAYLOAD_RANGE` when calling `assert_claim` which should always contain valid base64 characters of the payload (no padding characters). This makes it difficult to verify key/value if they are the last key in the payload - as you might not know the exact length of the payload in advance.
 This will be fixed in a future release.
 
 

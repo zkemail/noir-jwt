@@ -4,6 +4,7 @@ use rsa::{rsa::verify_sha256_pkcs1v15, types::RBN2048};
 use std::hash::sha256_var;
 use string_search::{StringBody, SubString};
 use zkemail::partial_hash::partial_sha256_var_end;
+use nodash::str_to_u64;
 
 /**
  * @brief Struct representing a JWT. Use the init functions to create an instance
@@ -123,47 +124,74 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
     * pair should be present in this range.
     * This is necessary now due to a limitation in base64.
     **/
-    pub fn validate_field<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    pub fn assert_claim<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
         self,
-        key: [u8; KEY_LENGTH],
-        value: BoundedVec<u8, MAX_VALUE_LENGTH>,
+        claim_key: [u8; KEY_LENGTH],
+        claim_value: BoundedVec<u8, MAX_VALUE_LENGTH>,
     ) {
-        let value: BoundedVec<u8, MAX_VALUE_LENGTH> = self.get_field::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(key);
-        assert(value == value, "incorrect value for claim");
+        let value: BoundedVec<u8, MAX_VALUE_LENGTH> =
+            self.get_claim::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(claim_key);
+        assert(value == claim_value, "incorrect value for claim");
     }
 
-    pub fn get_field<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    pub fn get_claim_string<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
         self,
         key: [u8; KEY_LENGTH],
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
+        self.get_claim::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(key, true)
+    }
+
+    pub fn get_claim_number<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+        self,
+        key: [u8; KEY_LENGTH],
+    ) -> u64 {
+        let claim = self.get_claim::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(key, false);
+        str_to_u64(claim.storage())
+    }
+
+    fn get_claim<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+        self,
+        key: [u8; KEY_LENGTH],
+        is_value_quoted: bool,
+    ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
+        // extract the value in unconstrained mode
         let value: BoundedVec<u8, MAX_VALUE_LENGTH> = unsafe {
-            self.get_field_unconstrained::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(key)
+            self.extract_claim_unconstrained::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(
+                key,
+                is_value_quoted,
+            )
         };
 
-        // self.validate_field::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(key, value);
+        // constrain the extracted value is present in the payload using string_search lib
+        // haystack is the base64 decoded payload; needle is the key
+        let haystack = self.prepare_haystack::<PAYLOAD_SCAN_RANGE>();
+        let needle: SubString<((KEY_LENGTH + 31) / 31) * 31, KEY_LENGTH / 31, KEY_LENGTH> =
+            SubString::new(key, key.len());
 
-        let mut substring: [u8; (KEY_LENGTH + MAX_VALUE_LENGTH + 5)] = [0; (KEY_LENGTH + MAX_VALUE_LENGTH + 5)];
-        substring[0] = 34; // "
-        for i in 0..KEY_LENGTH {
-            substring[i + 1] = key[i];
+        let (match, position): (bool, u32) = haystack.substring_match(needle);
+        assert(match, "key not found");
+
+        let mut offset = position + KEY_LENGTH + 2; // for a quote and colon
+        if (is_value_quoted) {
+            offset += 1; // for the quote before the value
         }
-        substring[KEY_LENGTH + 1] = 34; // "
-        substring[KEY_LENGTH + 2] = 58; // :
-        substring[KEY_LENGTH + 3] = 34; // "
+
         for i in 0..MAX_VALUE_LENGTH {
-            if i < value.len() {
-                substring[KEY_LENGTH + 4 + i] = value.storage()[i];
+            if (i < value.len()) {
+                assert(haystack.body[position + KEY_LENGTH + 3 + i] == value.storage()[i]);
             }
         }
-        substring[KEY_LENGTH + value.len() + 4] = 34; // "
+
+        if (is_value_quoted) {
+            assert(haystack.body[position + KEY_LENGTH + 3 + value.len()] == 34); // "
+        }
 
         value
     }
 
-    pub unconstrained fn get_field_unconstrained<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    fn prepare_haystack<let PAYLOAD_SCAN_RANGE: u32>(
         self,
-        key: [u8; KEY_LENGTH],
-    ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
+    ) -> StringBody<((((PAYLOAD_SCAN_RANGE / 4) * 3) + 31) / 31) * 31, (((PAYLOAD_SCAN_RANGE / 4) * 3) + 31) / 31, ((PAYLOAD_SCAN_RANGE / 4) * 3)> {
         assert(
             PAYLOAD_SCAN_RANGE % 4 == 0,
             "PAYLOAD_SCAN_RANGE should be a multiple of 4 to be a valid base64 chunk",
@@ -173,6 +201,7 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
             "PAYLOAD_SCAN_RANGE should be less than data length",
         );
 
+        // Decode the payload (from the b64_offset)
         let mut payload_b64: [u8; PAYLOAD_SCAN_RANGE] = [0; PAYLOAD_SCAN_RANGE];
         for i in 0..PAYLOAD_SCAN_RANGE {
             payload_b64[i] = self.data.storage()[(i + self.b64_offset)];
@@ -180,13 +209,21 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
 
         let payload: [u8; (PAYLOAD_SCAN_RANGE / 4 * 3)] = BASE64_URL_DECODER.decode(payload_b64); // b64 decoded length is ceil(DATA_LENGTH / 3) * 4
 
+        // Create the haystack
         let haystack: StringBody<(((PAYLOAD_SCAN_RANGE / 4 * 3) + 31) / 31) * 31, ((PAYLOAD_SCAN_RANGE / 4 * 3) + 31) / 31, (PAYLOAD_SCAN_RANGE / 4 * 3)> =
             StringBody::new(payload, payload.len());
 
-        // key is the needle
+        haystack
+    }
+
+    pub unconstrained fn extract_claim_unconstrained<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+        self,
+        key: [u8; KEY_LENGTH],
+        is_value_quoted: bool,
+    ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
+        let haystack = self.prepare_haystack::<PAYLOAD_SCAN_RANGE>();
         let needle: SubString<((KEY_LENGTH + 31) / 31) * 31, KEY_LENGTH / 31, KEY_LENGTH> =
             SubString::new(key, key.len());
-
         let (match, position): (bool, u32) = haystack.substring_match(needle);
 
         assert(match, "key not found");
@@ -196,11 +233,12 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
         let mut value: BoundedVec<u8, MAX_VALUE_LENGTH> = BoundedVec::new();
 
         for i in 0..MAX_VALUE_LENGTH {
-            if (payload[value_start + i] == 34) {
+            if (is_value_quoted & (haystack.body[value_start + i] == 34)) { // "
+                break;
+            } else if (!is_value_quoted & (haystack.body[value_start + i] == 44)) { // ,
                 break;
             }
-            value.storage[i] = payload[value_start + i];
-            value.len += 1;
+            value.push(haystack.body[value_start + i]);
         }
 
         value
@@ -389,7 +427,7 @@ fn test_verify_partial_hash() {
 }
 
 #[test]
-fn test_validate_field() {
+fn test_assert_claim() {
     let pubkey_modulus_limbs = [
         484791102317025465533947056954494751,
         689128460766062759582134715581990032,
@@ -478,11 +516,11 @@ fn test_validate_field() {
     jwt.verify();
 
     let value: BoundedVec<u8, 100> = BoundedVec::from_array("alice@test.com".as_bytes());
-    jwt.validate_field::<220, 5, 100>("email".as_bytes(), value);
+    jwt.assert_claim::<220, 5, 100>("email".as_bytes(), value);
 }
 
 #[test]
-fn test_get_field() {
+fn test_get_claim() {
     let pubkey_modulus_limbs = [
         484791102317025465533947056954494751,
         689128460766062759582134715581990032,
@@ -570,7 +608,7 @@ fn test_get_field() {
 
     jwt.verify();
 
-    let email: BoundedVec<u8, 100> = jwt.get_field::<220, 5, 100>("email".as_bytes());
+    let email: BoundedVec<u8, 100> = jwt.get_claim::<220, 5, 100>("email".as_bytes());
     let expected_email: BoundedVec<u8, 100> = BoundedVec::from_array("alice@test.com".as_bytes());
     assert(email == expected_email);
 }
