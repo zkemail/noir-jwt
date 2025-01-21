@@ -183,7 +183,7 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         claim_key: [u8; KEY_LENGTH],
         is_value_quoted: bool,
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
-        // extract the value in unconstrained mode
+        // @safety: extract the value in unconstrained mode, and verify later
         let value: BoundedVec<u8, MAX_VALUE_LENGTH> = unsafe {
             self.extract_claim_unconstrained::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(
                 claim_key,
@@ -236,21 +236,21 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         // payload_start when not using partial hash; and either 1, 2, or 3 when using partial hash to make the remaining data a multiple of 4
         // this is unconstrained, but a malicious prover can only create a corrupted base64 payload by providing an invalid offset,
         // which will be caught during base64 decoding
-        let b64_offset = self.compute_base64_offset();
+        let payload_b64_offset = self.compute_payload_base64_offset();
 
         assert(
             PAYLOAD_SCAN_RANGE % 4 == 0,
             "PAYLOAD_SCAN_RANGE should be a multiple of 4 to be a valid base64 chunk",
         );
         assert(
-            PAYLOAD_SCAN_RANGE <= (self.data.len() - b64_offset),
+            PAYLOAD_SCAN_RANGE <= (self.data.len() - payload_b64_offset),
             "PAYLOAD_SCAN_RANGE should be less than data length",
         );
 
-        // Decode the payload (from the b64_offset)
+        // Decode the payload (from the payload_b64_offset)
         let mut payload_b64: [u8; PAYLOAD_SCAN_RANGE] = [0; PAYLOAD_SCAN_RANGE];
         for i in 0..PAYLOAD_SCAN_RANGE {
-            payload_b64[i] = self.data.storage()[(i + b64_offset)];
+            payload_b64[i] = self.data.storage()[(i + payload_b64_offset)];
         }
 
         let payload: [u8; (PAYLOAD_SCAN_RANGE / 4 * 3)] = BASE64_URL_DECODER.decode(payload_b64); // b64 decoded length is ceil(MAX_DATA_LENGTH / 3) * 4
@@ -296,12 +296,12 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
     }
 
     /**
-    * @brief Unconstrained function to compute a base64 offset on the signed data to make the payload base 64 decode-able
+    * @brief Unconstrained function to compute a base64 offset from which the payload can be decoded
     **/
-    pub unconstrained fn compute_base64_offset(self) -> u32 {
+    pub unconstrained fn compute_payload_base64_offset(self) -> u32 {
         let mut offset = 0;
         if (!self.is_partial_hash) {
-            // if not partial hash, the offset is the first byte of payload in signed data (index after '.')
+            // if not using partial hash, the offset is the first byte of payload in signed data (index after '.')
             for i in 0..MAX_DATA_LENGTH {
                 if (self.data.storage()[i] == 46) {
                     offset = i + 1;
@@ -309,7 +309,8 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
                 }
             }
         } else {
-            // if partial hash, offset is number of chars needed to make the partial payload a multiple of 4
+            // when using partial hash, the payload data after partial hash might not be a valid base64
+            // since base64 happens in chunks of 4 bytes, we just need to make the remaining data a multiple of 4
             offset = self.data.len() % 4;
         }
         offset
@@ -475,7 +476,6 @@ fn test_verify_partial_hash() {
         106, 98, 50, 48, 105, 76, 67, 74, 108, 98, 87, 70, 112, 98, 70, 57, 50, 90, 88, 74, 112, 90,
         109, 108, 108, 90, 67, 73, 54, 100, 72, 74, 49, 90, 88, 48,
     ]);
-    let b64_offset = 1;
     let partial_hash = [
         291844137, 871603302, 1977778012, 4213794212, 4080401768, 1349766907, 4032784244,
         2198146592,

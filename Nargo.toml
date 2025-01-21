@@ -8,7 +8,7 @@ compiler_version = ">=1.0.0"
 [dependencies]
 rsa = { git = "https://github.com/noir-lang/noir_rsa", tag = "v0.5.0", directory="lib" }
 base64 = { git =  "https://github.com/noir-lang/noir_base64", tag = "v0.3.1" }
-string_search = { git = "https://github.com/noir-lang/noir_string_search", tag = "v0.3.0" }
+string_search = { git = "https://github.com/noir-lang/noir_string_search", tag = "kb/fix_index_out_of_range_bug" }
 bignum = { git = "https://github.com/noir-lang/noir-bignum", tag = "v0.5.0" }
-zkemail = { git = "https://github.com/zkemail/zkemail.nr", tag="saleel/update-deps", directory="lib" } # for partial SHA
-nodash = { git = "https://github.com/olehmisar/nodash/", tag = "v0.39.4" }
+zkemail = { git = "https://github.com/zkemail/zkemail.nr", tag="v0.4.0", directory="lib" } # for partial SHA
+nodash = { git = "https://github.com/olehmisar/nodash/", tag = "v0.39.4" } # for bytes to u64
