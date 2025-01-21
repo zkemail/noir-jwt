@@ -80,7 +80,6 @@ fn main() -> pub BoundedVec<u8, 100> {
 
     let jwt = JWT::init(
         data,
-        b64_offset,
         pubkey_modulus_limbs,
         redc_params_limbs,
         signature_limbs,

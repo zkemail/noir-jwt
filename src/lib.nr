@@ -17,7 +17,6 @@ pub struct JWT<let DATA_LENGTH: u32> {
     signature_limbs: [Field; 18],
     partial_hash: [u32; 8],
     full_data_length: u32,
-    b64_offset: u32,
     is_partial_hash: bool, // used internally
 }
 
@@ -34,7 +33,6 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
     **/
     pub fn init(
         data: BoundedVec<u8, DATA_LENGTH>,
-        b64_offset: u32,
         pubkey_modulus_limbs: [Field; 18],
         redc_params_limbs: [Field; 18],
         signature_limbs: [Field; 18],
@@ -45,7 +43,6 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
             data,
             full_data_length: DATA_LENGTH,
             partial_hash: [0; 8],
-            b64_offset: b64_offset,
             pubkey_modulus_limbs,
             redc_params_limbs,
             signature_limbs,
@@ -69,7 +66,6 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
         partial_data: BoundedVec<u8, DATA_LENGTH>,
         partial_hash: [u32; 8],
         full_data_length: u32,
-        b64_offset: u32,
         pubkey_modulus_limbs: [Field; 18],
         redc_params_limbs: [Field; 18],
         signature_limbs: [Field; 18],
@@ -80,7 +76,6 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
             data: partial_data,
             full_data_length,
             partial_hash,
-            b64_offset,
             pubkey_modulus_limbs,
             redc_params_limbs,
             signature_limbs,
@@ -91,7 +86,7 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
     /**
     * @brief Verify JWT signature with RSA 2048/SHA256
     **/
-    pub fn verify(self) {
+    pub fn verify(mut self) {
         let mut data_hash: [u8; 32] = [0; 32];
 
         if (!self.is_partial_hash) {
@@ -200,19 +195,21 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
     fn prepare_haystack<let PAYLOAD_SCAN_RANGE: u32>(
         self,
     ) -> StringBody<((((PAYLOAD_SCAN_RANGE / 4) * 3) + 31) / 31) * 31, (((PAYLOAD_SCAN_RANGE / 4) * 3) + 31) / 31, ((PAYLOAD_SCAN_RANGE / 4) * 3)> {
+        let b64_offset = self.compute_base64_offset();
+
         assert(
             PAYLOAD_SCAN_RANGE % 4 == 0,
             "PAYLOAD_SCAN_RANGE should be a multiple of 4 to be a valid base64 chunk",
         );
         assert(
-            PAYLOAD_SCAN_RANGE <= (self.data.len() - self.b64_offset),
+            PAYLOAD_SCAN_RANGE <= (self.data.len() - b64_offset),
             "PAYLOAD_SCAN_RANGE should be less than data length",
         );
 
         // Decode the payload (from the b64_offset)
         let mut payload_b64: [u8; PAYLOAD_SCAN_RANGE] = [0; PAYLOAD_SCAN_RANGE];
         for i in 0..PAYLOAD_SCAN_RANGE {
-            payload_b64[i] = self.data.storage()[(i + self.b64_offset)];
+            payload_b64[i] = self.data.storage()[(i + b64_offset)];
         }
 
         let payload: [u8; (PAYLOAD_SCAN_RANGE / 4 * 3)] = BASE64_URL_DECODER.decode(payload_b64); // b64 decoded length is ceil(DATA_LENGTH / 3) * 4
@@ -252,6 +249,23 @@ impl<let DATA_LENGTH: u32> JWT<DATA_LENGTH> {
         }
 
         value
+    }
+
+    pub unconstrained fn compute_base64_offset(self) -> u32 {
+        let mut offset = 0;
+        if (!self.is_partial_hash) {
+            // if not partial hash, the offset is the first byte of payload in signed data (index after '.')
+            for i in 0..DATA_LENGTH {
+                if (self.data.storage()[i] == 46) {
+                    offset = i + 1;
+                    break;
+                }
+            }
+        } else {
+            // if partial hash, offset is number of chars needed to make the partial payload a multiple of 4
+            offset = self.data.len() % 4;
+        }
+        offset
     }
 }
 
@@ -332,11 +346,9 @@ fn test_verify() {
         100, 67, 53, 106, 98, 50, 48, 105, 76, 67, 74, 108, 98, 87, 70, 112, 98, 70, 57, 50, 90, 88,
         74, 112, 90, 109, 108, 108, 90, 67, 73, 54, 100, 72, 74, 49, 90, 88, 48,
     ]);
-    let b64_offset = 37;
 
     let jwt = JWT::init(
         data,
-        b64_offset,
         pubkey_modulus_limbs,
         redc_params_limbs,
         signature_limbs,
@@ -427,7 +439,6 @@ fn test_verify_partial_hash() {
         partial_data,
         partial_hash,
         full_data_length,
-        b64_offset,
         pubkey_modulus_limbs,
         redc_params_limbs,
         signature_limbs,
@@ -513,11 +524,9 @@ fn test_assert_claim_string() {
         100, 67, 53, 106, 98, 50, 48, 105, 76, 67, 74, 108, 98, 87, 70, 112, 98, 70, 57, 50, 90, 88,
         74, 112, 90, 109, 108, 108, 90, 67, 73, 54, 100, 72, 74, 49, 90, 88, 48,
     ]);
-    let b64_offset = 37;
 
     let jwt = JWT::init(
         data,
-        b64_offset,
         pubkey_modulus_limbs,
         redc_params_limbs,
         signature_limbs,
@@ -606,11 +615,9 @@ fn test_get_claim_string() {
         100, 67, 53, 106, 98, 50, 48, 105, 76, 67, 74, 108, 98, 87, 70, 112, 98, 70, 57, 50, 90, 88,
         74, 112, 90, 109, 108, 108, 90, 67, 73, 54, 100, 72, 74, 49, 90, 88, 48,
     ]);
-    let b64_offset = 37;
 
     let jwt = JWT::init(
         data,
-        b64_offset,
         pubkey_modulus_limbs,
         redc_params_limbs,
         signature_limbs,
@@ -700,11 +707,9 @@ fn test_get_claim_number() {
         100, 67, 53, 106, 98, 50, 48, 105, 76, 67, 74, 108, 98, 87, 70, 112, 98, 70, 57, 50, 90, 88,
         74, 112, 90, 109, 108, 108, 90, 67, 73, 54, 100, 72, 74, 49, 90, 88, 48,
     ]);
-    let b64_offset = 37;
 
     let jwt = JWT::init(
         data,
-        b64_offset,
         pubkey_modulus_limbs,
         redc_params_limbs,
         signature_limbs,
