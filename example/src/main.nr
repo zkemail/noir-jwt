@@ -88,7 +88,7 @@ fn main() -> pub BoundedVec<u8, 100> {
 
     jwt.verify();
 
-    let claim: BoundedVec<u8, 100> = jwt.get_claim::<100, 5, 100>("email".as_bytes());
+    let claim: BoundedVec<u8, 100> = jwt.get_claim_string::<100, 5, 100>("email".as_bytes());
 
     claim
 }
