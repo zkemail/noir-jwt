@@ -1,21 +1,14 @@
 {
-  "name": "js",
+  "name": "noir-jwt",
   "type": "module",
-  "private": true,
   "version": "1.0.0",
-  "description": "",
-  "main": "test.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "description": "JavaScript library for generating inputs for the noir-jwt circuit",
+  "main": "index.js",
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "saleel <saleel@saleel.xyz>",
+  "license": "MIT",
   "dependencies": {
     "@zk-email/helpers": "^6.3.2",
     "jsonwebtoken": "^9.0.2"
-  },
-  "devDependencies": {
-    "tsx": "^4.19.2"
   }
 }

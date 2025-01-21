@@ -6,13 +6,13 @@ import { generatePartialSHA } from "@zk-email/helpers";
 * @param {string} params.jwt - The JWT token to process (string)
 * @param {JsonWebKey} params.pubkey - The public key to verify the signature (JsonWebKey)
 * @param {string[]} params.shaPrecomputeTillKeys - (optional) Key(s) in the payload until which SHA should be precomputed
-* @param {number} params.maxSignedDataLength - Maximum length of signed data allowed by the circuit
+* @param {number} params.maxSignedDataLength - Maximum length of signed data (with or without partial hash) allowed by the circuit
 */
 export async function generateInputs({
   jwt,
   pubkey,
   shaPrecomputeTillKeys,
-  maxSignedDataLength,
+  maxSignedDataLength, // when using partial hash, this will be the length of data after partial hash
 }) {
   // Parse token
   const [headerB64, payloadB64] = jwt.split(".");
@@ -38,7 +38,7 @@ export async function generateInputs({
   const pubkeyBigInt = BigInt(
     "0x" + Buffer.from(pubkeyJWK.n, "base64").toString("hex")
   );
-  const redcParam = (1n << (2n * 2048n + 4n)) / pubkeyBigInt;
+  const redcParam = (1n << (2n * 2048n + 4n)) / pubkeyBigInt; // something needed by the noir big-num lib 
 
   const inputs = {
     pubkey_modulus_limbs: splitBigIntToChunks(pubkeyBigInt, 120, 18),
@@ -57,11 +57,6 @@ export async function generateInputs({
       storage: Array.from(signedDataPadded),
       len: signedData.length,
     }
-
-    // base64 offset is the offset on the signed-data byte array from where the circuit will try and decode the payload
-    // in this case it will be index of the payload (header.length + 1 for the '.')
-    const base64Offset = headerB64.length + 1;
-    inputs.b64_offset = base64Offset;
   } else {
     // Precompute SHA256 of the signed data
     // SHA256 is done in 64 byte chunks, so we can hash upto certain portion outside of circuit to save constraints
@@ -91,7 +86,7 @@ export async function generateInputs({
         body: dataPadded,
         bodyLength: dataPadded.length,
         selectorString: precomputeSelector,
-        maxRemainingBodyLength: 640, // Max length configured in the circuit
+        maxRemainingBodyLength: maxSignedDataLength, // Max length configured in the circuit
       });
 
     // generatePartialSHA returns the remaining data after the precomputed SHA256 hash including padding
@@ -108,21 +103,12 @@ export async function generateInputs({
     const bodyRemainingPadded = new Uint8Array(maxSignedDataLength);
     bodyRemainingPadded.set(bodyRemaining);
 
-    // B64 encoding happens serially, so we can decode a portion as long as the indices of the slice is a multiple of 4
-    // Since we only pass the data after partial SHA to the circuit, the B64 slice might not be parse-able
-    // This is because the first index of partial_data might not be a 4th multiple of original payload B64
-    // So we also pass in an offset after which the data in partial_data is a 4th multiple of original payload B64
-    // An attacker giving wrong index will fail as incorrectly decoded bytes wont contain "hd" or "nonce"
-    const payloadLengthInRemainingData = shaCutoffIndex - headerB64.length - 1; // -1 for the separator '.'
-    const b64Offset = 4 - (payloadLengthInRemainingData % 4);
-
     inputs.partial_data = {
       storage: Array.from(bodyRemainingPadded),
       len: remainingDataLength,
     };
     inputs.partial_hash = u8ToU32(precomputedSha);
     inputs.full_data_length = signedData.length;
-    inputs.b64_offset = b64Offset;
   }
 
   return inputs;
@@ -142,15 +128,6 @@ function u8ToU32(input) {
       (input[i * 4 + 3] << 0);
   }
   return out;
-}
-
-/*
-* Extracts the modulus from a JWK public key as a BigInt
-* @param {JsonWebKey} jwk - The public key in JWK format
-* @returns {Promise<bigint>} The modulus as a BigInt
-*/
-export async function pubkeyModulusFromJWK(jwk) {
-
 }
 
 /*
