@@ -71,12 +71,12 @@ export async function createKeyAndSignData() {
   const payload = {
     iss: "http://test.com",
     sub: "ABCD123123",
-    aud: "123123123.456456456",
-    exp: Math.floor(Date.now() / 1000) + 60 * 60,
-    iat: Math.floor(Date.now() / 1000),
+    email_verified: true,
     nonce,
     email,
-    email_verified: true,
+    iat: 1737642217,
+    aud: "123123123.456456456",
+    exp: Math.floor(Date.now() / 1000) + 60 * 60,
   };
 
   // Sign the payload
@@ -121,11 +121,11 @@ async function generateNoirTestData() {
       let redc_params_limbs = [${inputs.redc_params_limbs.join(", ")}];
       let signature_limbs = [${inputs.signature_limbs.join(", ")}];
       let data: BoundedVec<u8, 512> = BoundedVec::from_array([${inputs.data.storage.filter(s => s !== 0).join(", ")}]);
-      let b64_offset = ${inputs.b64_offset};
+      let base64_decode_offset = ${inputs.base64_decode_offset};
 
       let jwt = JWT::init(
         data,
-        b64_offset,
+        base64_decode_offset,
         pubkey_modulus_limbs,
         redc_params_limbs,
         signature_limbs,
@@ -151,7 +151,7 @@ async function generateNoirTestDataPartialHash() {
       let redc_params_limbs = [${inputs.redc_params_limbs.join(", ")}];
       let signature_limbs = [${inputs.signature_limbs.join(", ")}];
       let partial_data: BoundedVec<u8, 256> = BoundedVec::from_array([${inputs.partial_data.storage.filter(s => s !== 0).join(", ")}]);
-      let b64_offset = ${inputs.b64_offset};
+      let base64_decode_offset = ${inputs.base64_decode_offset};
       let partial_hash = [${inputs.partial_hash.join(", ")}];
       let full_data_length = ${inputs.full_data_length};
 
@@ -159,7 +159,7 @@ async function generateNoirTestDataPartialHash() {
         partial_data,
         partial_hash,
         full_data_length,
-        b64_offset,
+        base64_decode_offset,
         pubkey_modulus_limbs,
         redc_params_limbs,
         signature_limbs,

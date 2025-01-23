@@ -57,6 +57,10 @@ export async function generateInputs({
       storage: Array.from(signedDataPadded),
       len: signedData.length,
     }
+    // entire payload is base64 decode-able when not using partial hash
+    // offset in signed data is the index of payload start
+    // this can be any multiple of 4 from payload start, if you want to skip some bytes from start
+    inputs.base64_decode_offset = headerB64.length + 1;
   } else {
     // Precompute SHA256 of the signed data
     // SHA256 is done in 64 byte chunks, so we can hash upto certain portion outside of circuit to save constraints
@@ -81,7 +85,7 @@ export async function generateInputs({
     dataPadded.set(signedData);
 
     // Precompute the SHA256 hash
-    const { precomputedSha, bodyRemaining: bodyRemainingSHAPadded } =
+    const { precomputedSha, bodyRemaining: dataRemainingAfterPartialSHA  } =
       generatePartialSHA({
         body: dataPadded,
         bodyLength: dataPadded.length,
@@ -93,22 +97,31 @@ export async function generateInputs({
     // We don't need this padding so can we trim to it nearest 64x
     const shaCutoffIndex = Math.floor(sliceStart / 64) * 64; // Index up to which we precomputed SHA256
     const remainingDataLength = signedData.length - shaCutoffIndex;
-    const bodyRemaining = bodyRemainingSHAPadded.slice(0, remainingDataLength);
+    const dataRemainingAfterPartialSHAClean = dataRemainingAfterPartialSHA.slice(0, remainingDataLength);
 
     // Pad to the max length configured in the circuit
-    if (bodyRemaining.length > maxSignedDataLength) {
-      throw new Error("bodyRemaining after partial hash exceeds maxSignedDataLength");
+    if (dataRemainingAfterPartialSHAClean.length > maxSignedDataLength) {
+      throw new Error("dataRemainingAfterPartialSHAClean after partial hash exceeds maxSignedDataLength");
     }
 
-    const bodyRemainingPadded = new Uint8Array(maxSignedDataLength);
-    bodyRemainingPadded.set(bodyRemaining);
+    const dataRemainingAfterPartialSHAPadded = new Uint8Array(maxSignedDataLength);
+    dataRemainingAfterPartialSHAPadded.set(dataRemainingAfterPartialSHAClean);
 
     inputs.partial_data = {
-      storage: Array.from(bodyRemainingPadded),
+      storage: Array.from(dataRemainingAfterPartialSHAPadded),
       len: remainingDataLength,
     };
     inputs.partial_hash = u8ToU32(precomputedSha);
     inputs.full_data_length = signedData.length;
+
+    // when using partial hash, the data after the partial hash might not be a valid base64
+    // we need to find an offset (1, 2, or 3) such that the remaining payload is base64 decode-able
+    // this is the number that should be added to the "payload chunk that was included in SHA precompute"
+    // to make it a multiple of 4
+    // in other words, if you trim offset number of bytes from the remaining payload, it will be base64 decode-able
+    const payloadBytesInShaPrecompute = shaCutoffIndex - (headerB64.length + 1);
+    const offsetToMakeIt4x = 4 - (payloadBytesInShaPrecompute % 4);
+    inputs.base64_decode_offset = offsetToMakeIt4x;
   }
 
   return inputs;
