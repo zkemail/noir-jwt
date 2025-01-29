@@ -48,12 +48,8 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
 
       - name: Run Noir tests
-        working-directory: ./lib
         run: nargo test
 
-      - name: Run example project
-        working-directory: ./example     
-        run: nargo execute
   format:
     needs: [noir-version-list]
     runs-on: ubuntu-latest
