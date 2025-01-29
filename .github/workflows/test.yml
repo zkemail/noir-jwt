@@ -48,7 +48,7 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
 
       - name: Run Noir tests
-        working-directory: ./lib
+        working-directory: ./
         run: nargo test
 
       - name: Run example project
