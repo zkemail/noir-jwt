@@ -315,7 +315,7 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         is_value_quoted: bool,
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
         let haystack = self.prepare_haystack::<PAYLOAD_SCAN_RANGE>();
-        
+
         let mut key_with_quote: [u8; KEY_LENGTH + 1] = [0; KEY_LENGTH + 1];
         for i in 0..KEY_LENGTH {
             key_with_quote[i] = key[i];
