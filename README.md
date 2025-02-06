@@ -15,7 +15,7 @@ In your Nargo.toml file, add `jwt` as a dependency with the version you want to 
 
 ```toml
 [dependencies]
-jwt = { tag = "v0.3.0", git = "https://github.com/saleel/noir-jwt" }
+jwt = { tag = "v0.3.0", git = "https://github.com/zkemail/noir-jwt" }
 ```
 
 ## Usage
