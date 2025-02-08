@@ -15,7 +15,7 @@ In your Nargo.toml file, add `jwt` as a dependency with the version you want to 
 
 ```toml
 [dependencies]
-jwt = { tag = "v0.3.0", git = "https://github.com/saleel/noir-jwt" }
+jwt = { tag = "v0.3.0", git = "https://github.com/zkemail/noir-jwt" }
 ```
 
 ## Usage
@@ -96,7 +96,7 @@ Here is an explanation of the input parameters used in the circuit. Note that yo
     - Or any multiple of 4 from the start of the payload, if you want to skip the first few bytes of the payload. This can be used to save some constraints if the claims you want to verify are not at the start of the payload.
     - When using partial SHA, this should be 1, 2, or 3 to make the data after partial hash base64 decode-abe. This should the number that needs to be added to the payload_portion_included_in_partial_hash a multiple of 4.
 - `300` in the above example is the `PAYLOAD_SCAN_RANGE`, which is the index in the base64 encoded payload (from the `base64_decode_offset`) up to which we will decode and search for the claim.
-    - This essentially means that everything from `base64_decode_offset` to `PAYLOAD_RANGE` should be a valid base64 character of the payload, and when decoded should contain the key and value of every claim that you are validating.
+    - This essentially means that everything from `base64_decode_offset` to `PAYLOAD_SCAN_RANGE` should be a valid base64 character of the payload, and the claim should be present in this range.
     - `PAYLOAD_SCAN_RANGE` should be a multiple of 4 to be a valid base64 chunk.
 - If you are want to verify multiple claims, it is cheaper to use the same `PAYLOAD_SCAN_RANGE` (maximum needed) for all `assert_claim` calls as the compiler will optimize the repeated calculations.
 - `pubkey_modulus_limbs`, `redc_params_limbs`, `signature_limbs` are the limbs of the public key, redc params, and signature respectively (you can refer to the [bignum](https://github.com/noir-lang/noir-bignum) lib for more details).
