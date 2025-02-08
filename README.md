@@ -95,8 +95,8 @@ Here is an explanation of the input parameters used in the circuit. Note that yo
     - Normally, you can set this to the index of payload data (index after first `.` in the JWT string)
     - Or any multiple of 4 from the start of the payload, if you want to skip the first few bytes of the payload. This can be used to save some constraints if the claims you want to verify are not at the start of the payload.
     - When using partial SHA, this should be 1, 2, or 3 to make the data after partial hash base64 decode-abe. This should the number that needs to be added to the payload_portion_included_in_partial_hash a multiple of 4.
-- `300` in the above example is the `PAYLOAD_SCAN_RANGE`, which is the index in the base64 encoded payload (from the `base64_decode_offset`) up to which we will seach for the claim.
-    - This essentially means that everything from `base64_decode_offset` to `PAYLOAD_RANGE` should be a valid base64 character of the payload, and the claim should be present in this range.
+- `300` in the above example is the `PAYLOAD_SCAN_RANGE`, which is the index in the base64 encoded payload (from the `base64_decode_offset`) up to which we will decode and search for the claim.
+    - This essentially means that everything from `base64_decode_offset` to `PAYLOAD_RANGE` should be a valid base64 character of the payload, and when decoded should contain the key and value of every claim that you are validating.
     - `PAYLOAD_SCAN_RANGE` should be a multiple of 4 to be a valid base64 chunk.
 - If you are want to verify multiple claims, it is cheaper to use the same `PAYLOAD_SCAN_RANGE` (maximum needed) for all `assert_claim` calls as the compiler will optimize the repeated calculations.
 - `pubkey_modulus_limbs`, `redc_params_limbs`, `signature_limbs` are the limbs of the public key, redc params, and signature respectively (you can refer to the [bignum](https://github.com/noir-lang/noir-bignum) lib for more details).
@@ -104,6 +104,19 @@ Here is an explanation of the input parameters used in the circuit. Note that yo
     - `partial_data` is the data after the partial SHA.
     - `partial_hash` is the partial hash of the data before the partial SHA [8 limbs of 32 bits each]
     - `full_data_length` is the length of the full signed data (before partial SHA).
+
+#### How to compute PAYLOAD_SCAN_RANGE
+Suppose you have a JWT signed payload of 1000 bytes, out of which 200 is for the hedear and 800 is payload (both base64 encoded). And lets you only want to validate one claim  "nonce" which is of 60 bytes and usually starts at 120th index in the decoded payload.
+
+You can prehash the payload till "nonce" key to save constraints. What you pass in to the circuit would the remaining bytes of the partial hash, which in this case is a base64 encoded payload which when decoded results in a json slice that has "nonce" claim at the beginning. There will be some bytes before the nonce key as SHA precompute happens in multiple of 64s and is less like to exactly align with the nonce key index.
+
+In this case, you need extract around 70 bytes from the payload - `len("nonce")=5 + 2 quotes around key + 1 colon + 60 bytes for nonce value + 2 quotes around value`; and lets assume you have about 63 chars before the nonce key (the worst case).
+Your `PAYLOAD_SCAN_RANGE` then can be something like 180
+    - Its a multiple of 4
+    - When a base64 of 180 bytes is decoded, it can contain 180*3/4 = 135 bytes of payload
+    - This will have sufficient space to fit nonce claim and 63 bytes before the nonce key
+
+If you want to extract multiple claims, you should find the `PAYLOAD_SCAN_RANGE` needed for the farthest claim in the payload and use it for all `assert_claim` or `get_claim` methods as this is more efficient.
 
 ## Methods available
 
