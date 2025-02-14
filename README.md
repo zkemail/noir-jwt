@@ -15,7 +15,7 @@ In your Nargo.toml file, add `jwt` as a dependency with the version you want to 
 
 ```toml
 [dependencies]
-jwt = { tag = "v0.3.0", git = "https://github.com/zkemail/noir-jwt" }
+jwt = { tag = "v0.3.1", git = "https://github.com/zkemail/noir-jwt" }
 ```
 
 ## Usage
@@ -39,7 +39,7 @@ fn main(
 ) {
     let jwt = JWT::init(
         data,
-        base64_decode_offset: u32,
+        base64_decode_offset,
         pubkey_modulus_limbs,
         redc_params_limbs,
         signature_limbs,
