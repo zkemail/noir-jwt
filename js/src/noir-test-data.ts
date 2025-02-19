@@ -1,4 +1,6 @@
+// @ts-ignore
 import crypto from "crypto";
+// @ts-ignore
 import jsonwebtoken from "jsonwebtoken";
 import { generateInputs } from "./generate-inputs.js";
 
@@ -76,43 +78,34 @@ export async function createKeyAndSignData() {
     email,
     iat: 1737642217,
     aud: "123123123.456456456",
-    exp: Math.floor(Date.now() / 1000) + 60 * 60,
+    exp: 1799999999, // 2027-01-15T07:59:59.000Z
   };
 
   // Sign the payload
-  const signature = jsonwebtoken.sign(payload, privateKey, {
+  const jwt = jsonwebtoken.sign(payload, privateKey, {
     algorithm: "RS256",
   });
 
-  // Verify the signature
-  jsonwebtoken.verify(signature, publicKey);
+  // Verify the jwt
+  jsonwebtoken.verify(jwt, publicKey);
 
   // Convert public key to JWK
-  const pubkeyJwk = await globalThis.crypto.subtle.importKey(
-    "spki",
-    publicKey.export({ type: "spki", format: "der" }),
-    {
-      name: "RSASSA-PKCS1-v1_5",
-      hash: "SHA-256",
-    },
-    true,
-    ["verify"]
-  );
+  const pubkeyJwk = publicKey.export({ format: "jwk" });
 
   return {
     pubkeyJwk,
-    signature,
+    jwt,
     payload,
   };
 }
 
 async function generateNoirTestData() {
-  const { pubkeyJwk, signature } = await createKeyAndSignData();
+  const { pubkeyJwk, jwt } = await createKeyAndSignData();
 
   // Prepare inputs
   const inputs = await generateInputs({
-    jwt: signature,
-    pubkey: pubkeyJwk,
+    jwt: jwt,
+    pubkey: pubkeyJwk as JsonWebKey,
     maxSignedDataLength: 512,
   });
 
@@ -120,7 +113,7 @@ async function generateNoirTestData() {
       let pubkey_modulus_limbs = [${inputs.pubkey_modulus_limbs.join(", ")}];
       let redc_params_limbs = [${inputs.redc_params_limbs.join(", ")}];
       let signature_limbs = [${inputs.signature_limbs.join(", ")}];
-      let data: BoundedVec<u8, 512> = BoundedVec::from_array([${inputs.data.storage.filter(s => s !== 0).join(", ")}]);
+      let data: BoundedVec<u8, 512> = BoundedVec::from_array([${inputs.data!.storage.filter(s => s !== 0).join(", ")}]);
       let base64_decode_offset = ${inputs.base64_decode_offset};
 
       let jwt = JWT::init(
@@ -136,12 +129,12 @@ async function generateNoirTestData() {
 }
 
 async function generateNoirTestDataPartialHash() {
-  const { pubkeyJwk, signature } = await createKeyAndSignData();
+  const { pubkeyJwk, jwt } = await createKeyAndSignData();
 
   // Prepare inputs
   const inputs = await generateInputs({
-    jwt: signature,
-    pubkey: pubkeyJwk,
+    jwt: jwt,
+    pubkey: pubkeyJwk as JsonWebKey,
     shaPrecomputeTillKeys: ["nonce", "email"],
     maxSignedDataLength: 256,
   });
@@ -150,9 +143,9 @@ async function generateNoirTestDataPartialHash() {
       let pubkey_modulus_limbs = [${inputs.pubkey_modulus_limbs.join(", ")}];
       let redc_params_limbs = [${inputs.redc_params_limbs.join(", ")}];
       let signature_limbs = [${inputs.signature_limbs.join(", ")}];
-      let partial_data: BoundedVec<u8, 256> = BoundedVec::from_array([${inputs.partial_data.storage.filter(s => s !== 0).join(", ")}]);
+      let partial_data: BoundedVec<u8, 256> = BoundedVec::from_array([${inputs.partial_data!.storage.filter(s => s !== 0).join(", ")}]);
       let base64_decode_offset = ${inputs.base64_decode_offset};
-      let partial_hash = [${inputs.partial_hash.join(", ")}];
+      let partial_hash = [${inputs.partial_hash!.join(", ")}];
       let full_data_length = ${inputs.full_data_length};
 
       let jwt = JWT::init_with_partial_hash(
@@ -169,7 +162,7 @@ async function generateNoirTestDataPartialHash() {
     `
 }
 
-generateNoirTestData().then(console.log);
+generateNoirTestData().then(console.log).catch(console.error);
 console.log("\n\n--------------------------------\n\n");
-generateNoirTestDataPartialHash().then(console.log);
+generateNoirTestDataPartialHash().then(console.log).catch(console.error);
 
