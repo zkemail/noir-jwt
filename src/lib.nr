@@ -18,7 +18,7 @@ pub struct JWT<let MAX_DATA_LENGTH: u32> {
     partial_hash: [u32; 8],
     full_data_length: u32,
     base64_decode_offset: u32,
-    is_partial_hash: bool, // used internally
+    is_partial_hash: bool, // compile time variable used internally
 }
 
 impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
@@ -123,64 +123,57 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
     /**
     * @brief Get a string claim from the JWT payload
     *
-    * @param PAYLOAD_SCAN_RANGE: The index in the data up to which we will look for the claim (from the b64_offset).
-    *                            This basically means that everything from b64_offset to PAYLOAD_SCAN_RANGE should be a valid base64 character, and the claim
-    *                            should be present in this range. This is required now due to a limitation in base64.
-    *                            If you are asserting multiple claims, it is optimal to use same PAYLOAD_SCAN_RANGE for each (max value needed).
     * @param KEY_LENGTH: The length of the claim key
     * @param MAX_VALUE_LENGTH: The maximum length of the claim value
     * @param claim_key: The claim key
     * @return: The claim value
     **/
-    pub fn get_claim_string<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    pub fn get_claim_string<let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
         self,
         claim_key: [u8; KEY_LENGTH],
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
-        self.get_claim::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(claim_key, true)
+        self.get_claim::<KEY_LENGTH, MAX_VALUE_LENGTH>(claim_key, true)
     }
 
     /**
     * @brief Assert a string claim in the JWT payload.
-    *        Refer to `get_claim_string` for details on the `PAYLOAD_SCAN_RANGE`, `KEY_LENGTH` and `MAX_VALUE_LENGTH`.
+    *        Refer to `get_claim_string` for details on the `KEY_LENGTH` and `MAX_VALUE_LENGTH`.
     * @param claim_key: The claim key
     * @param claim_value: The claim value to assert
     **/
-    pub fn assert_claim_string<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    pub fn assert_claim_string<let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
         self,
         claim_key: [u8; KEY_LENGTH],
         claim_value: BoundedVec<u8, MAX_VALUE_LENGTH>,
     ) {
         let value: BoundedVec<u8, MAX_VALUE_LENGTH> =
-            self.get_claim_string::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(claim_key);
+            self.get_claim_string::<KEY_LENGTH, MAX_VALUE_LENGTH>(claim_key);
         assert(value == claim_value, "incorrect value for claim");
     }
 
     /**
     * @brief Get a number (u64) claim from the JWT payload
-    *        Refer to `get_claim_string` for details on the `PAYLOAD_SCAN_RANGE`, `KEY_LENGTH` and `MAX_VALUE_LENGTH`.
+    *        Refer to `get_claim_string` for details on the `KEY_LENGTH` and `MAX_VALUE_LENGTH`.
     * @param claim_key: The claim key
     * @return: The claim value
     **/
-    pub fn get_claim_number<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32>(
-        self,
-        claim_key: [u8; KEY_LENGTH],
-    ) -> u64 {
-        let claim = self.get_claim::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, 20>(claim_key, false);
+    pub fn get_claim_number<let KEY_LENGTH: u32>(self, claim_key: [u8; KEY_LENGTH]) -> u64 {
+        let claim = self.get_claim::<KEY_LENGTH, 20>(claim_key, false);
         str_to_u64(claim.storage())
     }
 
     /**
     * @brief Assert a number (u64) claim in the JWT payload.
-    *        Refer to `get_claim_number` for details on the `PAYLOAD_SCAN_RANGE`, `KEY_LENGTH` and `MAX_VALUE_LENGTH`.
+    *        Refer to `get_claim_number` for details on the `KEY_LENGTH` and `MAX_VALUE_LENGTH`.
     * @param claim_key: The claim key
     * @param claim_value: The claim value to assert
     **/
-    pub fn assert_claim_number<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32>(
+    pub fn assert_claim_number<let KEY_LENGTH: u32>(
         self,
         claim_key: [u8; KEY_LENGTH],
         claim_value: u64,
     ) {
-        let value = self.get_claim_number::<PAYLOAD_SCAN_RANGE, KEY_LENGTH>(claim_key);
+        let value = self.get_claim_number::<KEY_LENGTH>(claim_key);
         assert(value == claim_value, "incorrect value for claim");
     }
 
@@ -189,11 +182,8 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
     * @param claim_key: The claim key
     * @return: The claim value
     **/
-    pub fn get_claim_bool<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32>(
-        self,
-        claim_key: [u8; KEY_LENGTH],
-    ) -> bool {
-        let value = self.get_claim::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, 5>(claim_key, false);
+    pub fn get_claim_bool<let KEY_LENGTH: u32>(self, claim_key: [u8; KEY_LENGTH]) -> bool {
+        let value = self.get_claim::<KEY_LENGTH, 5>(claim_key, false);
         let mut is_true = true;
         for i in 0..4 {
             is_true = is_true & (value.storage()[i] == "true".as_bytes()[i]);
@@ -206,30 +196,30 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
 
     /**
     * @brief Assert a boolean claim in the JWT payload.
-    *        Refer to `get_claim_bool` for details on the `PAYLOAD_SCAN_RANGE`, `KEY_LENGTH` and `MAX_VALUE_LENGTH`.
+    *        Refer to `get_claim_bool` for details on the `KEY_LENGTH` and `MAX_VALUE_LENGTH`.
     * @param claim_key: The claim key
     * @param claim_value: The claim value to assert
     **/
-    pub fn assert_claim_bool<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32>(
+    pub fn assert_claim_bool<let KEY_LENGTH: u32>(
         self,
         claim_key: [u8; KEY_LENGTH],
         claim_value: bool,
     ) {
-        let value = self.get_claim_bool::<PAYLOAD_SCAN_RANGE, KEY_LENGTH>(claim_key);
+        let value = self.get_claim_bool::<KEY_LENGTH>(claim_key);
         assert(value == claim_value, "incorrect value for claim");
     }
 
     /**
     * @brief Internal function to get claim bytes from the JWT payload
     **/
-    fn get_claim<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    fn get_claim<let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
         self,
         claim_key: [u8; KEY_LENGTH],
         is_value_quoted: bool,
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
         let value: BoundedVec<u8, MAX_VALUE_LENGTH> = unsafe {
             //@safety: extract the value in unconstrained mode, and verify later
-            self.extract_claim_unconstrained::<PAYLOAD_SCAN_RANGE, KEY_LENGTH, MAX_VALUE_LENGTH>(
+            self.extract_claim_unconstrained::<KEY_LENGTH, MAX_VALUE_LENGTH>(
                 claim_key,
                 is_value_quoted,
             )
@@ -237,7 +227,7 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
 
         // constrain the extracted value is present in the payload using string_search lib
         // haystack is the base64 decoded payload;
-        let haystack = self.prepare_haystack::<PAYLOAD_SCAN_RANGE>();
+        let haystack = self.prepare_haystack();
 
         // needle is the key + a quote - searching for just the key string might return matches from elsewhere in the payload
         let mut key_with_quote: [u8; KEY_LENGTH + 1] = [0; KEY_LENGTH + 1];
@@ -279,29 +269,31 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
     /**
     * @brief Internal function to prepare the haystack for string search (base64 decoded payload with offset applied)
     **/
-    fn prepare_haystack<let PAYLOAD_SCAN_RANGE: u32>(
+    fn prepare_haystack(
         self,
-    ) -> StringBody<((((PAYLOAD_SCAN_RANGE / 4) * 3) + 31) / 31) * 31, (((PAYLOAD_SCAN_RANGE / 4) * 3) + 31) / 31, ((PAYLOAD_SCAN_RANGE / 4) * 3)> {
-        assert(
-            PAYLOAD_SCAN_RANGE % 4 == 0,
-            "PAYLOAD_SCAN_RANGE should be a multiple of 4 to be a valid base64 chunk",
-        );
-        assert(
-            PAYLOAD_SCAN_RANGE <= (self.data.len() - self.base64_decode_offset),
-            "PAYLOAD_SCAN_RANGE should be less than data length",
-        );
+    ) -> StringBody<((((MAX_DATA_LENGTH / 4) * 3) + 31) / 31) * 31, (((MAX_DATA_LENGTH / 4) * 3) + 31) / 31, ((MAX_DATA_LENGTH / 4) * 3)> {
+        // We need to decode the payload from the payload_b64_offset; i.e. data.slice(0, base64_decode_offset)
+        let mut data_to_b64_decode: [u8; MAX_DATA_LENGTH] = [0; MAX_DATA_LENGTH];
 
-        // Decode the payload (from the payload_b64_offset)
-        let mut payload_b64: [u8; PAYLOAD_SCAN_RANGE] = [0; PAYLOAD_SCAN_RANGE];
-        for i in 0..PAYLOAD_SCAN_RANGE {
-            payload_b64[i] = self.data.storage()[(i + self.base64_decode_offset)];
+        // Conditional inside the for loop blows up the constraint size
+        // So we fill the full MAX_DATA_LENGTH (rotate on overflow) and prepare a BoundedVec with the correct length later
+        for i in 0..MAX_DATA_LENGTH {
+            data_to_b64_decode[i] =
+                self.data.storage()[(i + self.base64_decode_offset) % self.data.len()];
         }
 
-        let payload: [u8; (PAYLOAD_SCAN_RANGE / 4 * 3)] = BASE64_URL_DECODER.decode(payload_b64); // b64 decoded length is ceil(MAX_DATA_LENGTH / 3) * 4
+        let data_to_decode_bv: BoundedVec<u8, MAX_DATA_LENGTH> = BoundedVec::from_parts(
+            data_to_b64_decode,
+            self.data.len() - self.base64_decode_offset,
+        );
+
+        // Decode the payload
+        let payload: BoundedVec<u8, ((MAX_DATA_LENGTH / 4) * 3)> =
+            BASE64_URL_DECODER::decode_var(data_to_decode_bv); // b64 decoded length is ceil(MAX_DATA_LENGTH / 3) * 4
 
         // Create the haystack
-        let haystack: StringBody<(((PAYLOAD_SCAN_RANGE / 4 * 3) + 31) / 31) * 31, ((PAYLOAD_SCAN_RANGE / 4 * 3) + 31) / 31, (PAYLOAD_SCAN_RANGE / 4 * 3)> =
-            StringBody::new(payload, payload.len());
+        let haystack: StringBody<((((MAX_DATA_LENGTH / 4) * 3) + 31) / 31) * 31, (((MAX_DATA_LENGTH / 4) * 3) + 31) / 31, ((MAX_DATA_LENGTH / 4) * 3)> =
+            StringBody::new(payload.storage(), payload.len());
 
         haystack
     }
@@ -309,12 +301,12 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
     /**
     * @brief Unconstrained function to extract claim bytes from the JWT payload
     **/
-    pub unconstrained fn extract_claim_unconstrained<let PAYLOAD_SCAN_RANGE: u32, let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
+    pub unconstrained fn extract_claim_unconstrained<let KEY_LENGTH: u32, let MAX_VALUE_LENGTH: u32>(
         self,
         key: [u8; KEY_LENGTH],
         is_value_quoted: bool,
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
-        let haystack = self.prepare_haystack::<PAYLOAD_SCAN_RANGE>();
+        let haystack = self.prepare_haystack();
 
         let mut key_with_quote: [u8; KEY_LENGTH + 1] = [0; KEY_LENGTH + 1];
         for i in 0..KEY_LENGTH {
@@ -343,8 +335,6 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
             }
             value.push(haystack.body[value_start_idx + i]);
         }
-
-        println(f"value: {value}");
 
         value
     }
@@ -620,7 +610,7 @@ fn test_get_claim_string() {
 
     jwt.verify();
 
-    let email: BoundedVec<u8, 100> = jwt.get_claim_string::<228, 5, 100>("email".as_bytes());
+    let email: BoundedVec<u8, 100> = jwt.get_claim_string("email".as_bytes());
     let expected_email: BoundedVec<u8, 100> = BoundedVec::from_array("alice@test.com".as_bytes());
     assert(email == expected_email);
 }
@@ -715,7 +705,7 @@ fn test_get_claim_string_partial_hash() {
 
     jwt.verify();
 
-    let email: BoundedVec<u8, 100> = jwt.get_claim_string::<120, 5, 100>("email".as_bytes());
+    let email: BoundedVec<u8, 100> = jwt.get_claim_string("email".as_bytes());
     let expected_email: BoundedVec<u8, 100> = BoundedVec::from_array("alice@test.com".as_bytes());
     assert(email == expected_email);
 }
@@ -810,7 +800,7 @@ fn test_assert_claim_string() {
     jwt.verify();
 
     let value: BoundedVec<u8, 100> = BoundedVec::from_array("alice@test.com".as_bytes());
-    jwt.assert_claim_string::<228, 5, 100>("email".as_bytes(), value);
+    jwt.assert_claim_string("email".as_bytes(), value);
 }
 
 #[test]
@@ -902,7 +892,7 @@ fn test_get_claim_number() {
 
     jwt.verify();
 
-    let iat: u64 = jwt.get_claim_number::<228, 3>("iat".as_bytes());
+    let iat: u64 = jwt.get_claim_number("iat".as_bytes());
     let expected_iat: u64 = 1737642217;
     assert(iat == expected_iat);
 }
@@ -997,7 +987,7 @@ fn test_assert_claim_number() {
     jwt.verify();
 
     let expected_iat: u64 = 1737642217;
-    jwt.assert_claim_number::<228, 3>("iat".as_bytes(), expected_iat);
+    jwt.assert_claim_number("iat".as_bytes(), expected_iat);
 }
 
 #[test]
@@ -1089,7 +1079,7 @@ fn test_get_claim_bool() {
 
     jwt.verify();
 
-    let email_verified: bool = jwt.get_claim_bool::<228, 14>("email_verified".as_bytes());
+    let email_verified: bool = jwt.get_claim_bool("email_verified".as_bytes());
     assert(email_verified);
 }
 
@@ -1182,5 +1172,5 @@ fn test_assert_claim_bool() {
 
     jwt.verify();
 
-    jwt.assert_claim_bool::<228, 14>("email_verified".as_bytes(), true);
+    jwt.assert_claim_bool("email_verified".as_bytes(), true);
 }

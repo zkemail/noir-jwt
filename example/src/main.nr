@@ -17,9 +17,9 @@ fn main(
 
     jwt.verify();
 
-    let claim: BoundedVec<u8, 100> = jwt.get_claim_string::<228, 5, 100>("email".as_bytes());
+    let claim: BoundedVec<u8, 100> = jwt.get_claim_string("email".as_bytes());
 
-    jwt.assert_claim_bool::<100, 14>("email_verified".as_bytes(), true);
+    jwt.assert_claim_bool("email_verified".as_bytes(), true);
 
     claim
 }
