@@ -238,8 +238,8 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         let mut needle: SubString<(((KEY_LENGTH + 1) + 31) / 31) * 31, (KEY_LENGTH + 1) / 31, (KEY_LENGTH + 1)> =
             SubString::new(key_with_quote, key_with_quote.len());
 
-        let (match, position): (bool, u32) = haystack.substring_match(needle);
-        assert(match, "key not found in the payload");
+        let (result, position): (bool, u32) = haystack.substring_match(needle);
+        assert(result, "key not found in the payload");
 
         // assert value after claim_key is a quote and colon
         assert(haystack.body[position + KEY_LENGTH + 1] == 58); // :
@@ -317,8 +317,8 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         let mut needle: SubString<(((KEY_LENGTH + 1) + 31) / 31) * 31, (KEY_LENGTH + 1) / 31, (KEY_LENGTH + 1)> =
             SubString::new(key_with_quote, key_with_quote.len());
 
-        let (match, position): (bool, u32) = haystack.substring_match(needle);
-        assert(match, "key not found in the payload");
+        let (result, position): (bool, u32) = haystack.substring_match(needle);
+        assert(result, "key not found in the payload");
 
         // Get the value after the key
         let mut value_start_idx = position + key.len() + 2; // +2 for the quote and colon
