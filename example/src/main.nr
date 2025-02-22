@@ -21,5 +21,10 @@ fn main(
 
     jwt.assert_claim_bool("email_verified".as_bytes(), true);
 
+    jwt.assert_claim_string(
+        "iss".as_bytes(),
+        BoundedVec::<u8, 10>::from_array("ABCD123123".as_bytes()),
+    );
+
     claim
 }
