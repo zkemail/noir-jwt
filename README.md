@@ -1,12 +1,23 @@
 # Noir JWT Verifier
 
-[Noir](https://noir-lang.org/) library to verify JWT tokens, and prove claims. Currently only supports RS256 with 2048 bit keys.
+[Noir](https://noir-lang.org/) library to verify JWT tokens and prove claims. Currently only supports RS256 with 2048 bit keys.
 
-- Supports arbitrary sized inputs.
-- Supports partial SHA hashing on the input to save constraints.
-- Uses [string_search](https://github.com/noir-lang/noir_string_search) lib to extract and verify claims efficiently.
+- Supports arbitrary sized JWTs.
+- Supports partial SHA hashing on the signed data to save constraints.
+- Can extract and verify claims of string, number, and boolean types efficiently.
 
-You can learn more about JWT [here](https://jwt.io/introduction).
+### How it works
+
+You can learn more about JWT [here](https://jwt.io/introduction). But in short, JWT is a data structure that contains three parts:
+- Header: contains metadata about the token (JSON object with algorithm and type of token)
+- Payload: contains the claims (JSON key-value pairs)
+- Signature: RSA signature of the header and payload (assuming RS256 algorithm)
+
+JWT token is a string represented as `base64(header).base64(payload).base64(signature)`.
+
+This noir library takes the signed data (which is `base64(header).base64(payload)`),  signature and the public key and verifies the signature (RSA-SHA256 verification).
+
+There are utility methods to extract or verify claims from the payload, which is powered by the [string_search](https://github.com/noir-lang/noir_string_search) lib.
 
 
 ## Installation
@@ -15,12 +26,12 @@ In your Nargo.toml file, add `jwt` as a dependency with the version you want to 
 
 ```toml
 [dependencies]
-jwt = { tag = "v0.3.1", git = "https://github.com/zkemail/noir-jwt" }
+jwt = { tag = "v0.4.0", git = "https://github.com/zkemail/noir-jwt" }
 ```
 
 ## Usage
 
-Assusming you installed the latest version, you can use it in your Noir program like this:
+Assuming you installed the latest version, you can use it in your Noir program like this:
 
 ```nr
 use jwt::JWT;
@@ -34,7 +45,7 @@ fn main(
     pubkey_modulus_limbs: pub [Field; 18],
     redc_params_limbs: [Field; 18],
     signature_limbs: [Field; 18],
-    nonce: pub BoundedVec<u8, MAX_NONCE_LENGTH>
+    expected_nonce: pub BoundedVec<u8, MAX_NONCE_LENGTH>
 ) {
     let jwt = JWT::init(
         data,
@@ -46,8 +57,8 @@ fn main(
 
     jwt.verify();
 
-    // Validate key value pair in payload JSON
-    jwt.assert_claim_string("nonce".as_bytes(), nonce);
+    // Verify `iss` claim value is "test"
+    jwt.assert_claim_string("iss".as_bytes(), BoundedVec::<u8, 4>::from_array("test".as_bytes()));
 }
 ```
 
@@ -91,7 +102,7 @@ fn main(
 Here is an explanation of the input parameters used in the circuit. Note that you can **use the JS SDK to generate these inputs**.
 
 - `data` is the signed data (headerb64 + "." + payloadb64)
-- When using partial SHA
+- When using partial SHA:
     - `partial_data` is the data after the partial SHA.
     - `partial_hash` is the partial hash of the data before the partial SHA [8 limbs of 32 bits each]
     - `full_data_length` is the length of the full signed data (before partial SHA).
@@ -137,7 +148,7 @@ Here is an explanation of the input parameters used in the circuit. Note that yo
 
 ## Input generation from JS
 
-A JS SDK is included in the repo to generate inputs for the circuit. Since this is only a library, you would need to combine it with other input used in your application circuit.
+A JS SDK is included in the repo that can help you with generating inputs required for the JWT circuit. Since this is only a library, you would need to combine it with other input used in your application circuit.
 
 Install the dependency
 ```
