@@ -32,7 +32,7 @@
     /* Emit */
     "sourceMap": true,
     // "inlineSourceMap": true,                          /* Include sourcemap files inside the emitted JavaScript. */
-    "noEmit": true,
+    // "noEmit": true,
     // "outFile": "./",                                  /* Specify a file that bundles all outputs into one JavaScript file. If 'declaration' is true, also designates a file that bundles all .d.ts output. */
     // "removeComments": true,                           /* Disable emitting comments. */
     // "importHelpers": true,                            /* Allow importing helper functions from tslib once per project, instead of including them per-file. */
@@ -81,10 +81,7 @@
 
     /* Completeness */
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
-    "skipLibCheck": true,
-
-    "allowImportingTsExtensions": true
+    "skipLibCheck": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["src/noir-test-data.ts"]
+  "include": ["src/**/*"]
 }
