@@ -10,18 +10,16 @@
   ],
   "author": "saleel <saleel@saleel.xyz>",
   "license": "MIT",
-  "dependencies": {
-    "hash-wasm": "^4.12.0"
-  },
   "scripts": {
     "build": "tsc",
     "build:dev": "tsc --watch",
-    "generate-noir-test-data": "node --loader ts-node/esm src/noir-test-data.ts"
+    "generate-noir-test-data": "npx tsx scripts/noir-test-data.ts"
   },
   "devDependencies": {
-    "ts-node": "^10.9.1",
-    "typescript": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.8",
-    "jsonwebtoken": "^9.0.2"
-  }
+    "jsonwebtoken": "^9.0.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.0.0"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

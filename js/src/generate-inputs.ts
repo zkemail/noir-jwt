@@ -1,4 +1,4 @@
-import { createSHA256 } from 'hash-wasm';
+import { generatePartialSHA256 } from './partial-sha';
 
 type GenerateInputsParams = {
   jwt: string;
@@ -101,41 +101,24 @@ export async function generateInputs({
     const smallerIndexInB64 = Math.floor((smallerIndex * 4) / 3); // 4 B64 chars = 3 bytes
 
     const sliceStart = headerB64.length + smallerIndexInB64 + 1; // +1 for the '.'
-    // const precomputeSelector = signedDataString.slice(
-    //   sliceStart,
-    //   sliceStart + 12
-    // ); // 12 is a random slice length - to get a unique string selector from base64 payload
-
-    // generatePartialSHA expects padded input - Noir SHA lib doesn't need padded input; so we simply pad to 64x bytes
-    // const dataPadded = new Uint8Array(Math.ceil(signedData.length / 64) * 64);
-    // dataPadded.set(signedData);
 
     // Precompute the SHA256 hash
-    const { precomputedSha, bodyRemaining: dataRemainingAfterPartialSHA } =
-      await generatePartialSHA256(signedData, Math.floor(sliceStart / 64));
-
-    console.log(precomputedSha);
-    console.log(dataRemainingAfterPartialSHA);
-
-    // generatePartialSHA returns the remaining data after the precomputed SHA256 hash including padding
-    // We don't need this padding so can we trim to it nearest 64x
-    const shaCutoffIndex = Math.floor(sliceStart / 64) * 64; // Index up to which we precomputed SHA256
-    const remainingDataLength = signedData.length - shaCutoffIndex;
-    const dataRemainingAfterPartialSHAClean = dataRemainingAfterPartialSHA.slice(0, remainingDataLength);
+    const { partialHash, remainingData } =
+      await generatePartialSHA256(signedData, sliceStart);
 
     // Pad to the max length configured in the circuit
-    if (dataRemainingAfterPartialSHAClean.length > maxSignedDataLength) {
-      throw new Error("dataRemainingAfterPartialSHAClean after partial hash exceeds maxSignedDataLength");
+    if (remainingData.length > maxSignedDataLength) {
+      throw new Error("remainingData after partial hash exceeds maxSignedDataLength");
     }
 
-    const dataRemainingAfterPartialSHAPadded = new Uint8Array(maxSignedDataLength);
-    dataRemainingAfterPartialSHAPadded.set(dataRemainingAfterPartialSHAClean);
+    const remainingDataPadded = new Uint8Array(maxSignedDataLength);
+    remainingDataPadded.set(remainingData);
 
     inputs.partial_data = {
-      storage: Array.from(dataRemainingAfterPartialSHAPadded),
-      len: remainingDataLength,
+      storage: Array.from(remainingDataPadded),
+      len: remainingData.length,
     };
-    inputs.partial_hash = Array.from(precomputedSha);
+    inputs.partial_hash = Array.from(partialHash);
     inputs.full_data_length = signedData.length;
 
     // when using partial hash, the data after the partial hash might not be a valid base64
@@ -143,6 +126,8 @@ export async function generateInputs({
     // this is the number that should be added to the "payload chunk that was included in SHA precompute"
     // to make it a multiple of 4
     // in other words, if you trim offset number of bytes from the remaining payload, it will be base64 decode-able
+    const shaCutoffIndex = signedData.length - remainingData.length;
+    console.log(shaCutoffIndex);
     const payloadBytesInShaPrecompute = shaCutoffIndex - (headerB64.length + 1);
     const offsetToMakeIt4x = 4 - (payloadBytesInShaPrecompute % 4);
     inputs.base64_decode_offset = offsetToMakeIt4x;
@@ -151,51 +136,6 @@ export async function generateInputs({
   return inputs as JWTCircuitInputs;
 }
 
-// Returns the intermediate SHA256 hash of the data
-async function generatePartialSHA256(data: Uint8Array, blockIndex: number) {
-  if (typeof data === 'string') {
-    const encoder = new TextEncoder();
-    data = encoder.encode(data); // Convert string to Uint8Array
-}
-
-const blockSize = 64; // 512 bits
-const H = new Uint32Array([
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
-]);
-
-for (let i = 0; i <= blockIndex; i++) {
-    if (i * blockSize >= data.length) {
-        throw new Error('Block index out of range.');
-    }
-
-    const block = new Uint8Array(blockSize);
-    block.set(data.slice(i * blockSize, (i + 1) * blockSize));
-    sha256Block(H, block);
-}
-
-  // Get the intermediate digest (this is **not** the final hash)
-  return {
-    precomputedSha: H,
-    bodyRemaining: data.slice(blockIndex * blockSize + blockSize)
-  }
-}
-
-// Function to convert u8 array to u32 array - partial_hash expects u32[8] array
-// new Uint32Array(input.buffer) does not work due to difference in endianness
-// Copied from https://github.com/zkemail/zkemail.nr/blob/main/js/src/utils.ts#L9
-// TODO: Import Mach34 npm package instead when zkemail.nr is ready
-function u8ToU32(input: Uint8Array) {
-  const out = new Uint32Array(input.length / 4);
-  for (let i = 0; i < out.length; i++) {
-    out[i] =
-      (input[i * 4 + 0] << 24) |
-      (input[i * 4 + 1] << 16) |
-      (input[i * 4 + 2] << 8) |
-      (input[i * 4 + 3] << 0);
-  }
-  return out;
-}
 
 /*
 * Splits a BigInt into fixed-size chunks
@@ -216,76 +156,4 @@ export function splitBigIntToChunks(
     chunks.push(chunk);
   }
   return chunks;
-}
-
-
-// const crypto = require('crypto');
-
-/**
- * SHA-256 constants (first 32 bits of fractional parts of cube roots of primes)
- */
-const K = [
-  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-];
-
-/**
-* Rotate right function (SHA-256 bitwise operations)
-*/
-function rotr(n: number, x: number) {
-  return (x >>> n) | (x << (32 - n));
-}
-
-/**
-* SHA-256 Compression Function (Processes 64-byte blocks)
-*/
-function sha256Block(H: Uint32Array, block: Uint8Array) {
-  let w = new Uint32Array(64);
-  let a = H[0], b = H[1], c = H[2], d = H[3];
-  let e = H[4], f = H[5], g = H[6], h = H[7];
-
-  // Convert block into 32-bit words
-  for (let i = 0; i < 16; i++) {
-      w[i] = (block[i * 4] << 24) | (block[i * 4 + 1] << 16) | (block[i * 4 + 2] << 8) | block[i * 4 + 3];
-  }
-  for (let i = 16; i < 64; i++) {
-      const s0 = rotr(7, w[i - 15]) ^ rotr(18, w[i - 15]) ^ (w[i - 15] >>> 3);
-      const s1 = rotr(17, w[i - 2]) ^ rotr(19, w[i - 2]) ^ (w[i - 2] >>> 10);
-      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
-  }
-
-  // Main compression loop
-  for (let i = 0; i < 64; i++) {
-      const S1 = rotr(6, e) ^ rotr(11, e) ^ rotr(25, e);
-      const ch = (e & f) ^ (~e & g);
-      const temp1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
-      const S0 = rotr(2, a) ^ rotr(13, a) ^ rotr(22, a);
-      const maj = (a & b) ^ (a & c) ^ (b & c);
-      const temp2 = (S0 + maj) >>> 0;
-
-      h = g;
-      g = f;
-      f = e;
-      e = (d + temp1) >>> 0;
-      d = c;
-      c = b;
-      b = a;
-      a = (temp1 + temp2) >>> 0;
-  }
-
-  // Update intermediate hash values
-  H[0] = (H[0] + a) >>> 0;
-  H[1] = (H[1] + b) >>> 0;
-  H[2] = (H[2] + c) >>> 0;
-  H[3] = (H[3] + d) >>> 0;
-  H[4] = (H[4] + e) >>> 0;
-  H[5] = (H[5] + f) >>> 0;
-  H[6] = (H[6] + g) >>> 0;
-  H[7] = (H[7] + h) >>> 0;
 }
