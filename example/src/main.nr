@@ -23,7 +23,7 @@ fn main(
 
     jwt.assert_claim_string(
         "iss".as_bytes(),
-        BoundedVec::<u8, 10>::from_array("ABCD123123".as_bytes()),
+        BoundedVec::<u8, 50>::from_array("http://test.com".as_bytes()),
     );
 
     claim
