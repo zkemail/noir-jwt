@@ -2,7 +2,7 @@
 import crypto from "crypto";
 // @ts-ignore
 import jsonwebtoken from "jsonwebtoken";
-import { generateInputs } from "./generate-inputs.js";
+import { generateInputs } from "../src/generate-inputs.js";
 
 // const key =  crypto.generateKeyPairSync("rsa", {
 //   modulusLength: 2048,

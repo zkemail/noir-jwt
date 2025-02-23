@@ -1,12 +1,23 @@
 # Noir JWT Verifier
 
-[Noir](https://noir-lang.org/) library to verify JWT tokens, and prove claims. Currently only supports RS256 with 2048 bit keys.
+[Noir](https://noir-lang.org/) library to verify JWT tokens and prove claims. Currently only supports RS256 with 2048 bit keys.
 
-- Supports arbitrary sized inputs.
-- Supports partial hashing on the input.
-- Uses [string_search](https://github.com/noir-lang/noir_string_search) lib to extract and verify claims efficiently.
+- Supports arbitrary sized JWTs.
+- Supports partial SHA hashing on the signed data to save constraints.
+- Can extract and verify claims of string, number, and boolean types efficiently.
 
-You can learn more about JWT [here](https://jwt.io/introduction).
+### How it works
+
+You can learn more about JWT [here](https://jwt.io/introduction). But in short, JWT is a data structure that contains three parts:
+- Header: contains metadata about the token (JSON object with algorithm and type of token)
+- Payload: contains the claims (JSON key-value pairs)
+- Signature: RSA signature of the header and payload (assuming RS256 algorithm)
+
+JWT token is a string represented as `base64(header).base64(payload).base64(signature)`.
+
+This noir library takes the signed data (which is `base64(header).base64(payload)`),  signature and the public key and verifies the signature (RSA-SHA256 verification).
+
+There are utility methods to extract or verify claims from the payload, which is powered by the [string_search](https://github.com/noir-lang/noir_string_search) lib.
 
 
 ## Installation
@@ -15,18 +26,18 @@ In your Nargo.toml file, add `jwt` as a dependency with the version you want to 
 
 ```toml
 [dependencies]
-jwt = { tag = "v0.3.1", git = "https://github.com/zkemail/noir-jwt" }
+jwt = { tag = "v0.4.0", git = "https://github.com/zkemail/noir-jwt" }
 ```
 
 ## Usage
 
-Assusming you installed the latest version, you can use it in your Noir program like this:
+Assuming you installed the latest version, you can use it in your Noir program like this:
 
-```noir
+```nr
 use jwt::JWT;
 
-global MAX_DATA_LENGTH: u32 = 900;
-global MAX_NONCE_LENGTH: u32 = 32;
+global MAX_DATA_LENGTH: u32 = 900; // max length of signed data (headerb64 + "." + payloadb64)
+global MAX_NONCE_LENGTH: u32 = 32; // we are verifying `nonce` claim
 
 fn main(
     data: BoundedVec<u8, MAX_DATA_LENGTH>,
@@ -34,8 +45,7 @@ fn main(
     pubkey_modulus_limbs: pub [Field; 18],
     redc_params_limbs: [Field; 18],
     signature_limbs: [Field; 18],
-    domain: pub BoundedVec<u8, MAX_DOMAIN_LENGTH>,
-    nonce: pub BoundedVec<u8, MAX_NONCE_LENGTH>,
+    expected_nonce: pub BoundedVec<u8, MAX_NONCE_LENGTH>
 ) {
     let jwt = JWT::init(
         data,
@@ -47,17 +57,17 @@ fn main(
 
     jwt.verify();
 
-    // Validate key value pair in payload JSON
-    jwt.assert_claim_string::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
+    // Verify `iss` claim value is "test"
+    jwt.assert_claim_string("iss".as_bytes(), BoundedVec::<u8, 4>::from_array("test".as_bytes()));
 }
 ```
 
 #### With partial hash
 
-```noir
+```nr
 use jwt::JWT;
 
-global MAX_PARTIAL_DATA_LENGTH: u32 = 640; // Data after partial SHA
+global MAX_PARTIAL_DATA_LENGTH: u32 = 640; // Max length of the remaining data after partial hash
 global MAX_NONCE_LENGTH: u32 = 32;
 
 fn main(
@@ -83,82 +93,62 @@ fn main(
     jwt.verify();
 
     // Validate key value pair in payload JSON
-    jwt.assert_claim_string::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
+    jwt.assert_claim_string("nonce".as_bytes(), nonce);
 }
 ```
 
 ## Input parameters
 
-Here is an explanation of the input parameters used in the circuit. Note that you can use the JS SDK to generate the values for these parameters.
+Here is an explanation of the input parameters used in the circuit. Note that you can **use the JS SDK to generate these inputs**.
 
-- `base64_decode_offset` is the index in `data` from which the circuit will try to decode the base64
-    - Normally, you can set this to the index of payload data (index after first `.` in the JWT string)
-    - Or any multiple of 4 from the start of the payload, if you want to skip the first few bytes of the payload. This can be used to save some constraints if the claims you want to verify are not at the start of the payload.
-    - When using partial SHA, this should be 1, 2, or 3 to make the data after partial hash base64 decode-abe. This should the number that needs to be added to the payload_portion_included_in_partial_hash a multiple of 4.
-- `300` in the above example is the `PAYLOAD_SCAN_RANGE`, which is the index in the base64 encoded payload (from the `base64_decode_offset`) up to which we will decode and search for the claim.
-    - This essentially means that everything from `base64_decode_offset` to `PAYLOAD_SCAN_RANGE` should be a valid base64 character of the payload, and the claim should be present in this range.
-    - `PAYLOAD_SCAN_RANGE` should be a multiple of 4 to be a valid base64 chunk.
-- If you are want to verify multiple claims, it is cheaper to use the same `PAYLOAD_SCAN_RANGE` (maximum needed) for all `assert_claim` calls as the compiler will optimize the repeated calculations.
-- `pubkey_modulus_limbs`, `redc_params_limbs`, `signature_limbs` are the limbs of the public key, redc params, and signature respectively (you can refer to the [bignum](https://github.com/noir-lang/noir-bignum) lib for more details).
-- When using partial SHA
+- `data` is the signed data (headerb64 + "." + payloadb64)
+- When using partial SHA:
     - `partial_data` is the data after the partial SHA.
     - `partial_hash` is the partial hash of the data before the partial SHA [8 limbs of 32 bits each]
     - `full_data_length` is the length of the full signed data (before partial SHA).
+- `pubkey_modulus_limbs`, `redc_params_limbs`, `signature_limbs` are the limbs of the RSA public key, redc params (this is required for bignum lib), and signature respectively.
+- `base64_decode_offset` is the index in `data` from which the circuit will try to decode the base64
+    - We only need to decode the payload (or a portion of it), as the claims we want to extract are in the payload.
+    - Normally, you can set `base64_decode_offset` to be the start index of payload data (index after first `.` in the JWT string)
+    - Or, any multiple of 4 (as base64 decodes chunks of 4) from the start of the payload if you want to skip the first few bytes of the payload. This can be used to optimize some constraints if the claims you want to verify are usually in the middle or towards the end of the payload.
+    - When using partial SHA, this should be 1, 2, or 3 to make the data after partial hash base64 decode-able (a valid base64). This should be the number of bytes that needs to be sliced from the data_remaining_after_partial_hash to make it a valid base64.
 
-#### How to compute PAYLOAD_SCAN_RANGE
-Suppose you have a JWT signed payload of 1000 bytes, out of which 200 is for the hedear and 800 is payload (both base64 encoded). And lets you only want to validate one claim  "nonce" which is of 60 bytes and usually starts at 120th index in the decoded payload.
-
-You can prehash the payload till "nonce" key to save constraints. What you pass in to the circuit would the remaining bytes of the partial hash, which in this case is a base64 encoded payload which when decoded results in a json slice that has "nonce" claim at the beginning. There will be some bytes before the nonce key as SHA precompute happens in multiple of 64s and is less like to exactly align with the nonce key index.
-
-In this case, you need extract around 70 bytes from the payload - `len("nonce")=5 + 2 quotes around key + 1 colon + 60 bytes for nonce value + 2 quotes around value`; and lets assume you have about 63 chars before the nonce key (the worst case).
-Your `PAYLOAD_SCAN_RANGE` then can be something like 180
-    - Its a multiple of 4
-    - When a base64 of 180 bytes is decoded, it can contain 180*3/4 = 135 bytes of payload
-    - This will have sufficient space to fit nonce claim and 63 bytes before the nonce key
-
-If you want to extract multiple claims, you should find the `PAYLOAD_SCAN_RANGE` needed for the farthest claim in the payload and use it for all `assert_claim` or `get_claim` methods as this is more efficient.
 
 ## Methods available
 
 - `get_claim_string` - extracts a string claim from the payload and returns it as a `BoundedVec<u8, MAX_VALUE_LENGTH>`
-    ```noir
-    let claim: BoundedVec<u8, MAX_VALUE_LENGTH> = jwt.get_claim_string::<300, 5, MAX_NONCE_LENGTH>("email".as_bytes());
+    ```nr
+    let claim: BoundedVec<u8, MAX_VALUE_LENGTH> = jwt.get_claim_string("email".as_bytes());
     ```
 
 - `assert_claim_string` - verifies that the claim is present in the payload and is a valid base64 encoded string
-    ```noir
-    jwt.assert_claim_string::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
+    ```nr
+    jwt.assert_claim_string("nonce".as_bytes(), nonce);
     ```
 - `get_claim_number` - extracts a number claim from the payload and returns it as a `u64`
-    ```noir
-    let claim: u64 = jwt.get_claim_number::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes());
+    ```nr
+    let claim: u64 = jwt.get_claim_number("nonce".as_bytes());
     ```
 
 - `assert_claim_number` - verifies that the claim is present in the payload and is a valid number
-    ```noir
-    jwt.assert_claim_number::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
+    ```nr
+    jwt.assert_claim_number("nonce".as_bytes(), nonce);
     ```
 
 - `get_claim_bool` - extracts a boolean claim from the payload and returns it as a `bool`
-    ```noir
-    let claim: bool = jwt.get_claim_bool::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes());
+    ```nr
+    let claim: bool = jwt.get_claim_bool("nonce".as_bytes());
     ```
 
 - `assert_claim_bool` - verifies that the claim is present in the payload and is a valid boolean
-    ```noir
-    jwt.assert_claim_bool::<300, 5, MAX_NONCE_LENGTH>("nonce".as_bytes(), nonce);
+    ```nr
+    jwt.assert_claim_bool("nonce".as_bytes(), nonce);
     ```
-- These methods use generic arguments `<PAYLOAD_SCAN_RANGE, CLAIM_KEY_LENGTH, MAX_CLAIM_VALUE_LENGTH>` to optimize the constraints.
-    - `PAYLOAD_SCAN_RANGE` is the index in the base64 encoded payload (from the `base64_decode_offset`) up to which we will seach for the claim.
-    - `CLAIM_KEY_LENGTH` is the length of the claim key.
-    - `MAX_CLAIM_VALUE_LENGTH` is the maximum length of the claim value.
-- You can check the tests in `src/lib.nr` to see how these methods are used.
-
 
 
 ## Input generation from JS
 
-A JS SDK is included in the repo to generate inputs for the circuit. Since this is only a library, you would need to combine it with your own input generation needed for your application circuit.
+A JS SDK is included in the repo that can help you with generating inputs required for the JWT circuit. Since this is only a library, you would need to combine it with other input used in your application circuit.
 
 Install the dependency
 ```
@@ -172,17 +162,12 @@ const { generateInputs } = require("noir-jwt");
 const inputs = generateInputs({
   jwt,
   pubkey,
-  shaPrecomputeTillKeys,
   maxSignedDataLength,
+  shaPrecomputeTillKeys,
 });
 ```
 where:
 - `jwt` is the JWT token to process (string)
 - `pubkey` is the public key to verify the signature in `JsonWebKey` format
-- `maxSignedDataLength` is the maximum length of signed data (with or without partial hash) which you configured in your circuit.
-- `shaPrecomputeTillKeys` is the key(s) in the payload until which SHA should be precomputed. This is optional in case you want to precompute SHA to a certain point in the payload to save constraints.
-
-
-## Limitation
-
-Base64 does not support variable length in put now. Due to this you need to specify a `PAYLOAD_SCAN_RANGE` when calling `assert_claim_` which should always contain valid base64 characters of the payload (no padding characters). This makes it difficult to verify claims if they are the last key in the payload (as you might not know the exact length of the payload in advance).
+- `maxSignedDataLength` is the maximum length of signed data (with or without partial hash). This should be same as `MAX_DATA_LENGTH` configured in your circuit.
+- `shaPrecomputeTillKeys` (optional) is the claim key(s) in the payload until which SHA should be precomputed. You can specify the claims you are extracting in the circuit, and the JS SDK will precompute SHA up to the first claim.
