@@ -23,6 +23,10 @@
     // "allowUmdGlobalAccess": true,                     /* Allow accessing UMD globals from modules. */
     // "moduleSuffixes": [],                             /* List of file name suffixes to search when resolving a module. */
     "outDir": "./dist",
+    
+    /* Declaration Files */
+    "declaration": true,
+    "declarationMap": true,
 
     /* JavaScript Support */
     "allowJs": true,
@@ -83,5 +87,6 @@
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
     "skipLibCheck": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts", "scripts/**/*"]
 }

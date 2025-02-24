@@ -1,25 +1,33 @@
 {
   "name": "noir-jwt",
   "type": "module",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "description": "JavaScript library for generating inputs for the noir-jwt circuit",
-  "main": "dist/index.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:dev": "tsc --watch",
+    "generate-noir-test-data": "npx tsx scripts/noir-test-data.ts",
+    "prepublishOnly": "npm run build"
+  },
   "keywords": [
     "noir",
     "jwt"
   ],
   "author": "saleel <saleel@saleel.xyz>",
   "license": "MIT",
-  "scripts": {
-    "build": "tsc",
-    "build:dev": "tsc --watch",
-    "generate-noir-test-data": "npx tsx scripts/noir-test-data.ts",
-    "prepublish": "npm run build"
-  },
-  "files": [
-    "src",
-    "dist"
-  ],
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.8",
     "jsonwebtoken": "^9.0.2",
