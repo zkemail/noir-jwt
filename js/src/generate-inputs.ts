@@ -127,7 +127,6 @@ export async function generateInputs({
     // to make it a multiple of 4
     // in other words, if you trim offset number of bytes from the remaining payload, it will be base64 decode-able
     const shaCutoffIndex = signedData.length - remainingData.length;
-    console.log(shaCutoffIndex);
     const payloadBytesInShaPrecompute = shaCutoffIndex - (headerB64.length + 1);
     const offsetToMakeIt4x = 4 - (payloadBytesInShaPrecompute % 4);
     inputs.base64_decode_offset = offsetToMakeIt4x;

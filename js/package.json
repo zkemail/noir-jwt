@@ -1,23 +1,31 @@
 {
   "name": "noir-jwt",
-  "type": "module",
-  "version": "0.4.2",
+  "version": "0.4.5",
   "description": "JavaScript library for generating inputs for the noir-jwt circuit",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/types/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "package.json"
+  ],
+  "source": "src/index.ts",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "browser": "./dist/browser/index.js",
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/index.js"
+      "browser": "./dist/browser/index.js",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/esm/index.js"
     }
   },
-  "files": [
-    "dist",
-    "src"
-  ],
+  "types": "dist/types/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && npm run build:cjs && npm run build:esm && npm run build:browser",
+    "build:cjs": "tsc --outDir dist/cjs --module commonjs",
+    "build:esm": "tsc --outDir dist/esm --module es2020",
+    "build:browser": "tsc --outDir dist/browser --module es2020 --target es2020",
     "build:dev": "tsc --watch",
     "generate-noir-test-data": "npx tsx scripts/noir-test-data.ts",
     "prepublishOnly": "npm run build"
@@ -33,5 +41,6 @@
     "jsonwebtoken": "^9.0.2",
     "tsx": "^4.19.3",
     "typescript": "^5.0.0"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
