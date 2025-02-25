@@ -145,6 +145,8 @@ Here is an explanation of the input parameters used in the circuit. Note that yo
     jwt.assert_claim_bool("nonce".as_bytes(), nonce);
     ```
 
+> Please note that the keys of the claims need to be known at compile time.
+> This library doesn't support runtime JSON keys.
 
 ## Input generation from JS
 

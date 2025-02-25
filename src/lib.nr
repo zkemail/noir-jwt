@@ -98,7 +98,7 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
     pub fn verify(mut self) {
         let mut data_hash: [u8; 32] = [0; 32];
 
-        if (!self.is_partial_hash) {
+        if (!self.is_partial_hash) { // this is a compile time conditional
             // Hash the data using SHA256
             data_hash = sha256_var(self.data.storage(), self.data.len() as u64);
         } else {
@@ -217,8 +217,8 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         claim_key: [u8; KEY_LENGTH],
         is_value_quoted: bool,
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
+        /// Safety: extract the value in unconstrained mode, and verify later
         let value: BoundedVec<u8, MAX_VALUE_LENGTH> = unsafe {
-            //@safety: extract the value in unconstrained mode, and verify later
             self.extract_claim_unconstrained::<KEY_LENGTH, MAX_VALUE_LENGTH>(
                 claim_key,
                 is_value_quoted,
@@ -229,7 +229,8 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         // haystack is the base64 decoded payload;
         let haystack = self.prepare_haystack();
 
-        // needle is the key + a quote - searching for just the key string might return matches from elsewhere in the payload
+        // needle is the key + a quote (ending string quote after the key) - searching for just the key string might return false positives from elsewhere
+        // key length is known at compile time as we dont support runtime keys
         let mut key_with_quote: [u8; KEY_LENGTH + 1] = [0; KEY_LENGTH + 1];
         for i in 0..KEY_LENGTH {
             key_with_quote[i] = claim_key[i];
@@ -241,14 +242,14 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         let (result, position): (bool, u32) = haystack.substring_match(needle);
         assert(result, "key not found in the payload");
 
-        // assert value after claim_key is a quote and colon
+        // assert value after claim_key and the quote is a colon
         assert(haystack.body[position + KEY_LENGTH + 1] == 58); // :
 
         let mut value_offset = 0;
         if (is_value_quoted) {
             // assert the char before and after the value is a quote
             assert(haystack.body[position + KEY_LENGTH + 2] == 34); // "
-            assert(haystack.body[position + KEY_LENGTH + 3 + value.len()] == 34); // "
+            assert(haystack.body[position + KEY_LENGTH + 2 + value.len() + 1] == 34); // "
             value_offset = position + KEY_LENGTH + 3; // for two quote and colon
         } else {
             // numeric - assert the character after the value is a comma
