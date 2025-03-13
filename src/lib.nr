@@ -1,10 +1,10 @@
+use rsa::{rsa::verify_sha256_pkcs1v15, types::RBN2048};
+use sha256::sha256_var;
 use base64::BASE64_URL_DECODER;
 use bignum::{params::BigNumParams, RuntimeBigNum};
-use nodash::str_to_u64;
-use rsa::{rsa::verify_sha256_pkcs1v15, types::RBN2048};
-use std::hash::sha256_var;
 use string_search::{StringBody, SubString};
 use zkemail::partial_hash::partial_sha256_var_end;
+use nodash::str_to_u64;
 
 /**
  * @brief Struct representing a JWT. Use the init functions to create an instance
@@ -217,7 +217,7 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         claim_key: [u8; KEY_LENGTH],
         is_value_quoted: bool,
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
-        /// Safety: extract the value in unconstrained mode, and verify later
+        //Safety: extract the value in unconstrained mode, and verify later
         let value: BoundedVec<u8, MAX_VALUE_LENGTH> = unsafe {
             self.extract_claim_unconstrained::<KEY_LENGTH, MAX_VALUE_LENGTH>(
                 claim_key,
@@ -229,40 +229,49 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         // haystack is the base64 decoded payload;
         let haystack = self.prepare_haystack();
 
-        // needle is the key + a quote (ending string quote after the key) - searching for just the key string might return false positives from elsewhere
-        // key length is known at compile time as we dont support runtime keys
-        let mut key_with_quote: [u8; KEY_LENGTH + 1] = [0; KEY_LENGTH + 1];
+        // needle is the key with quotes around it - searching for just the key string might return false positives from elsewhere
+        // Note: key length is known at compile time as this lib doesn't support runtime keys
+        let mut key_with_quote: [u8; KEY_LENGTH + 2] = [0; KEY_LENGTH + 2];
+        key_with_quote[0] = 34; // ascii for quote
         for i in 0..KEY_LENGTH {
-            key_with_quote[i] = claim_key[i];
+            key_with_quote[i + 1] = claim_key[i];
         }
-        key_with_quote[KEY_LENGTH] = 34; // ascii for quote
-        let mut needle: SubString<(((KEY_LENGTH + 1) + 31) / 31) * 31, (KEY_LENGTH + 1) / 31, (KEY_LENGTH + 1)> =
+        key_with_quote[KEY_LENGTH + 1] = 34; // ascii for quote
+
+        let mut needle: SubString<(((KEY_LENGTH + 2) + 31) / 31) * 31, (KEY_LENGTH + 2) / 31, (KEY_LENGTH + 2)> =
             SubString::new(key_with_quote, key_with_quote.len());
 
         let (result, position): (bool, u32) = haystack.substring_match(needle);
         assert(result, "key not found in the payload");
 
-        // assert value after claim_key and the quote is a colon
-        assert(haystack.body[position + KEY_LENGTH + 1] == 58); // :
+        // assert value after quoted key is a colon
+        let colon_index = position + KEY_LENGTH + 2; // +2 for the quotes around the key
+        assert(haystack.body[colon_index] == 58); // :
 
-        let mut value_offset = 0;
+        // assert the value is correct - string have quotes around them, numbers and booleans don't
+        let mut value_start_index = colon_index + 1; // Value starts after the colon
+        let mut index_after_value = value_start_index + value.len(); // Index after the value, quoted or otherwise
+
         if (is_value_quoted) {
-            // assert the char before and after the value is a quote
-            assert(haystack.body[position + KEY_LENGTH + 2] == 34); // "
-            assert(haystack.body[position + KEY_LENGTH + 2 + value.len() + 1] == 34); // "
-            value_offset = position + KEY_LENGTH + 3; // for two quote and colon
-        } else {
-            // numeric - assert the character after the value is a comma
-            assert(haystack.body[position + KEY_LENGTH + 2 + value.len()] == 44); // ,
-            value_offset = position + KEY_LENGTH + 2; // for a quote and colon
+            // adjust start index for the quotes around the value
+            value_start_index = value_start_index + 1; // Adjust for the quote before the value
+            index_after_value = index_after_value + 2; // Adjust for the quotes around the value
+
+            // assert the char before and after the value is a quote 
+            assert(haystack.body[value_start_index - 1] == 34); // "
+            assert(haystack.body[index_after_value - 1] == 34); // "
         }
 
         // assert the value is correct
         for i in 0..MAX_VALUE_LENGTH {
             if (i < value.len()) {
-                assert(haystack.body[value_offset + i] == value.storage()[i]);
+                assert(haystack.body[value_start_index + i] == value.storage()[i]);
             }
         }
+
+        // assert the char after the value is a comma or a closing brace (last claim in the payload)
+        let char_after_value = haystack.body[index_after_value];
+        assert((char_after_value == 44) | (char_after_value == 125)); // , or }
 
         value
     }
@@ -309,20 +318,21 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
     ) -> BoundedVec<u8, MAX_VALUE_LENGTH> {
         let haystack = self.prepare_haystack();
 
-        let mut key_with_quote: [u8; KEY_LENGTH + 1] = [0; KEY_LENGTH + 1];
+        let mut key_with_quote: [u8; KEY_LENGTH + 2] = [0; KEY_LENGTH + 2];
+        key_with_quote[0] = 34; // ascii for quote
         for i in 0..KEY_LENGTH {
-            key_with_quote[i] = key[i];
+            key_with_quote[i + 1] = key[i];
         }
-        key_with_quote[KEY_LENGTH] = 34; // ascii for quote
+        key_with_quote[KEY_LENGTH + 1] = 34; // ascii for quote
 
-        let mut needle: SubString<(((KEY_LENGTH + 1) + 31) / 31) * 31, (KEY_LENGTH + 1) / 31, (KEY_LENGTH + 1)> =
+        let mut needle: SubString<(((KEY_LENGTH + 2) + 31) / 31) * 31, (KEY_LENGTH + 2) / 31, (KEY_LENGTH + 2)> =
             SubString::new(key_with_quote, key_with_quote.len());
 
         let (result, position): (bool, u32) = haystack.substring_match(needle);
         assert(result, "key not found in the payload");
 
         // Get the value after the key
-        let mut value_start_idx = position + key.len() + 2; // +2 for the quote and colon
+        let mut value_start_idx = position + key.len() + 3; // +3 for the quote around the key and the colon
         if (is_value_quoted) {
             value_start_idx += 1; // +1 for the quote before the value
         }
@@ -331,7 +341,7 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
 
         for i in 0..MAX_VALUE_LENGTH {
             let val = haystack.body[value_start_idx + i];
-            if ((val == 34) | (val == 44)) {
+            if ((val == 34) | (val == 44) | (val == 125)) {
                 break;
             }
             value.push(haystack.body[value_start_idx + i]);
@@ -1180,4 +1190,98 @@ fn test_assert_claim_bool() {
     jwt.verify();
 
     jwt.assert_claim_bool("email_verified".as_bytes(), true);
+}
+
+#[test]
+fn test_get_last_claim() {
+    let pubkey_modulus_limbs = [
+        484791102317025465533947056954494751,
+        689128460766062759582134715581990032,
+        810523707777777878428965619663888709,
+        184404549238669475316963116864788898,
+        93466218048229154672139102341852900,
+        584828628768888069086079532464056431,
+        97425187031931427039620311245463762,
+        26273806718910063326353308419294998,
+        788747954066548540615875263034804664,
+        889704621954975151388848797463892494,
+        311999144542197118282319553447935979,
+        569776388981460921496753063185331362,
+        903966640703701959992132828577771898,
+        159022820921763067563807580152706463,
+        503819859541011037194389727017199051,
+        1078173269124751507098806957834900664,
+        808018922828293630146825008649069450,
+        163,
+    ];
+    let redc_params_limbs = [
+        1143167338325541577958669340190596824,
+        782066667103526839077340987159104121,
+        1067845759344375818181746341911682002,
+        880124617802511701465844415806808588,
+        285259139341669707856057706066903101,
+        1230850420220071595120007854793337041,
+        243441877489860292941608721967510056,
+        821283804950244931298352888469271304,
+        265590023859021620015146340457966193,
+        955602690275722281613949658760787989,
+        704159826142581942518373637894303280,
+        313938418637521056314346970388282852,
+        296174013877567499290252280618882959,
+        127533166408087917092441034792304239,
+        486694435757811118946661778147879193,
+        742440511645057019411661928820777129,
+        106100992772450627263374716203348785,
+        6409,
+    ];
+    let signature_limbs = [
+        782421962573548264472674190647943355,
+        528649442614902878048130358901749842,
+        795671681115216636642039527621785323,
+        342055983261463759066440970886912343,
+        320943042314824191484469254030368420,
+        233931545977215775766660875366648712,
+        166738968145911552289782464945436391,
+        1280090914380823160665554635957223606,
+        225322564371992173705155119766257284,
+        1012067778676730712845356243167441596,
+        337008035250054394089555850701430953,
+        441480997772890594691718538441538925,
+        1266099611422563733802354067242028554,
+        163890419575820619684088542045789366,
+        71236811945264458762129145425586273,
+        106105739687938386497215871288359508,
+        598323717706499880526430558338637686,
+        97,
+    ];
+    let data: BoundedVec<u8, 512> = BoundedVec::from_array([
+        101, 121, 74, 104, 98, 71, 99, 105, 79, 105, 74, 83, 85, 122, 73, 49, 78, 105, 73, 115, 73,
+        110, 82, 53, 99, 67, 73, 54, 73, 107, 112, 88, 86, 67, 74, 57, 46, 101, 121, 74, 112, 99,
+        51, 77, 105, 79, 105, 74, 111, 100, 72, 82, 119, 79, 105, 56, 118, 100, 71, 86, 122, 100,
+        67, 53, 106, 98, 50, 48, 105, 76, 67, 74, 122, 100, 87, 73, 105, 79, 105, 74, 66, 81, 107,
+        78, 69, 77, 84, 73, 122, 77, 84, 73, 122, 73, 105, 119, 105, 90, 87, 49, 104, 97, 87, 120,
+        102, 100, 109, 86, 121, 97, 87, 90, 112, 90, 87, 81, 105, 79, 110, 82, 121, 100, 87, 85,
+        115, 73, 109, 53, 118, 98, 109, 78, 108, 73, 106, 111, 105, 77, 84, 73, 122, 77, 84, 73,
+        122, 77, 84, 73, 122, 73, 105, 119, 105, 90, 87, 49, 104, 97, 87, 119, 105, 79, 105, 74,
+        104, 98, 71, 108, 106, 90, 85, 66, 48, 90, 88, 78, 48, 76, 109, 78, 118, 98, 83, 73, 115,
+        73, 109, 108, 104, 100, 67, 73, 54, 77, 84, 99, 122, 78, 122, 89, 48, 77, 106, 73, 120, 78,
+        121, 119, 105, 89, 88, 86, 107, 73, 106, 111, 105, 77, 84, 73, 122, 77, 84, 73, 122, 77, 84,
+        73, 122, 76, 106, 81, 49, 78, 106, 81, 49, 78, 106, 81, 49, 78, 105, 73, 115, 73, 109, 86,
+        52, 99, 67, 73, 54, 77, 84, 99, 53, 79, 84, 107, 53, 79, 84, 107, 53, 79, 88, 48,
+    ]);
+    let base64_decode_offset = 37;
+
+    let jwt = JWT::init(
+        data,
+        base64_decode_offset,
+        pubkey_modulus_limbs,
+        redc_params_limbs,
+        signature_limbs,
+    );
+
+    jwt.verify();
+
+    let exp: u64 = jwt.get_claim_number("exp".as_bytes()); // exp is the last claim in the test payload
+    let expected_exp: u64 = 1799999999;
+    assert(exp == expected_exp);
 }
