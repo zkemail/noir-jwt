@@ -1,10 +1,10 @@
-use rsa::{rsa::verify_sha256_pkcs1v15, types::RBN2048};
-use sha256::sha256_var;
 use base64::BASE64_URL_DECODER;
 use bignum::{params::BigNumParams, RuntimeBigNum};
+use nodash::str_to_u64;
+use rsa::{rsa::verify_sha256_pkcs1v15, types::RBN2048};
+use sha256::sha256_var;
 use string_search::{StringBody, SubString};
 use zkemail::partial_hash::partial_sha256_var_end;
-use nodash::str_to_u64;
 
 /**
  * @brief Struct representing a JWT. Use the init functions to create an instance
@@ -98,7 +98,8 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
     pub fn verify(mut self) {
         let mut data_hash: [u8; 32] = [0; 32];
 
-        if (!self.is_partial_hash) { // this is a compile time conditional
+        if (!self.is_partial_hash) {
+            // this is a compile time conditional
             // Hash the data using SHA256
             data_hash = sha256_var(self.data.storage(), self.data.len() as u64);
         } else {
@@ -257,7 +258,7 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
             value_start_index = value_start_index + 1; // Adjust for the quote before the value
             index_after_value = index_after_value + 2; // Adjust for the quotes around the value
 
-            // assert the char before and after the value is a quote 
+            // assert the char before and after the value is a quote
             assert(haystack.body[value_start_index - 1] == 34); // "
             assert(haystack.body[index_after_value - 1] == 34); // "
         }
