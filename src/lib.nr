@@ -2,11 +2,11 @@ mod partial_hash;
 
 use base64::BASE64_URL_DECODER;
 use bignum::{params::BigNumParams, RuntimeBigNum};
-use rsa::{rsa::verify_sha256_pkcs1v15};
-use sha256::sha256_var;
-use string_search::{StringBody, SubString};
 use nodash::str_to_u64;
 use partial_hash::partial_sha256_var_end;
+use rsa::rsa::verify_sha256_pkcs1v15;
+use sha256::sha256_var;
+use string_search::{StringBody, SubString};
 
 /**
  * @brief Struct representing a JWT. Use the init functions to create an instance
@@ -118,7 +118,7 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         let params: BigNumParams<18, 2048> =
             BigNumParams::new(false, self.pubkey_modulus_limbs, self.redc_params_limbs);
 
-        let signature = RuntimeBigNum {params, limbs: self.signature_limbs };
+        let signature = RuntimeBigNum { params, limbs: self.signature_limbs };
 
         assert(verify_sha256_pkcs1v15(data_hash, signature, 65537));
     }
