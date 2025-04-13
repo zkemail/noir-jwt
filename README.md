@@ -6,6 +6,10 @@
 - Supports partial SHA hashing on the signed data to save constraints.
 - Can extract and verify claims of string, number, and boolean types efficiently.
 
+
+Supported from Noir v1.0.0-beta.3+
+
+
 ### How it works
 
 You can learn more about JWT [here](https://jwt.io/introduction). But in short, JWT is a data structure that contains three parts:
