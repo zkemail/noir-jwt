@@ -1,9 +1,0 @@
-[package]
-name = "jwt_example"
-type = "bin"
-version = "0.4.3"
-authors = ["saleel"]
-compiler_version = ">=1.0.0"
-
-[dependencies]
-jwt = { path = "../" }

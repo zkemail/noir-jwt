@@ -1,1 +1,0 @@
-nargo compile --skip-underconstrained-check --silence-warnings && bb gates -b target/jwt_example.json | jq  '.functions[0].circuit_size'
