@@ -1,10 +1,12 @@
+mod partial_hash;
+
 use base64::BASE64_URL_DECODER;
 use bignum::{params::BigNumParams, RuntimeBigNum};
-use nodash::str_to_u64;
-use rsa::{rsa::verify_sha256_pkcs1v15, types::RBN2048};
+use rsa::{rsa::verify_sha256_pkcs1v15};
 use sha256::sha256_var;
 use string_search::{StringBody, SubString};
-use zkemail::partial_hash::partial_sha256_var_end;
+use nodash::str_to_u64;
+use partial_hash::partial_sha256_var_end;
 
 /**
  * @brief Struct representing a JWT. Use the init functions to create an instance
@@ -12,9 +14,9 @@ use zkemail::partial_hash::partial_sha256_var_end;
  **/
 pub struct JWT<let MAX_DATA_LENGTH: u32> {
     data: BoundedVec<u8, MAX_DATA_LENGTH>,
-    pubkey_modulus_limbs: [Field; 18],
-    redc_params_limbs: [Field; 18],
-    signature_limbs: [Field; 18],
+    pubkey_modulus_limbs: [u128; 18],
+    redc_params_limbs: [u128; 18],
+    signature_limbs: [u128; 18],
     partial_hash: [u32; 8],
     full_data_length: u32,
     base64_decode_offset: u32,
@@ -35,9 +37,9 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
     pub fn init(
         data: BoundedVec<u8, MAX_DATA_LENGTH>,
         base64_decode_offset: u32,
-        pubkey_modulus_limbs: [Field; 18],
-        redc_params_limbs: [Field; 18],
-        signature_limbs: [Field; 18],
+        pubkey_modulus_limbs: [u128; 18],
+        redc_params_limbs: [u128; 18],
+        signature_limbs: [u128; 18],
     ) -> JWT<MAX_DATA_LENGTH> {
         assert(data.len() <= MAX_DATA_LENGTH, "data length is too long");
 
@@ -74,9 +76,9 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         partial_hash: [u32; 8],
         full_data_length: u32,
         base64_decode_offset: u32,
-        pubkey_modulus_limbs: [Field; 18],
-        redc_params_limbs: [Field; 18],
-        signature_limbs: [Field; 18],
+        pubkey_modulus_limbs: [u128; 18],
+        redc_params_limbs: [u128; 18],
+        signature_limbs: [u128; 18],
     ) -> JWT<MAX_DATA_LENGTH> {
         assert(partial_data.len() <= MAX_DATA_LENGTH, "partial_data length is too long");
 
@@ -116,7 +118,7 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         let params: BigNumParams<18, 2048> =
             BigNumParams::new(false, self.pubkey_modulus_limbs, self.redc_params_limbs);
 
-        let signature: RBN2048 = RuntimeBigNum::from_array(params, self.signature_limbs);
+        let signature = RuntimeBigNum {params, limbs: self.signature_limbs };
 
         assert(verify_sha256_pkcs1v15(data_hash, signature, 65537));
     }
