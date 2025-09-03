@@ -241,7 +241,8 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         }
         key_with_quote[KEY_LENGTH + 1] = 34; // ascii for quote
 
-        let mut needle: SubString<(((KEY_LENGTH + 2) + 31) / 31) * 31, (KEY_LENGTH + 2) / 31, (KEY_LENGTH + 2)> =
+        let mut needle
+            : SubString<(((KEY_LENGTH + 2) + 31) / 31) * 31, (KEY_LENGTH + 2) / 31, (KEY_LENGTH + 2)> =
             SubString::new(key_with_quote, key_with_quote.len());
 
         let (result, position): (bool, u32) = haystack.substring_match(needle);
@@ -328,7 +329,8 @@ impl<let MAX_DATA_LENGTH: u32> JWT<MAX_DATA_LENGTH> {
         }
         key_with_quote[KEY_LENGTH + 1] = 34; // ascii for quote
 
-        let mut needle: SubString<(((KEY_LENGTH + 2) + 31) / 31) * 31, (KEY_LENGTH + 2) / 31, (KEY_LENGTH + 2)> =
+        let mut needle
+            : SubString<(((KEY_LENGTH + 2) + 31) / 31) * 31, (KEY_LENGTH + 2) / 31, (KEY_LENGTH + 2)> =
             SubString::new(key_with_quote, key_with_quote.len());
 
         let (result, position): (bool, u32) = haystack.substring_match(needle);
