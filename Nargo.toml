@@ -1,15 +1,15 @@
 [package]
 name = "jwt"
 type = "lib"
-version = "0.4.3"
+version = "0.5.0"
 authors = ["saleel"]
 compiler_version = ">=1.0.0"
 
 [dependencies]
-rsa = { git = "https://github.com/noir-lang/noir_rsa", tag = "v0.7.0" }
-sha256 = { git = "https://github.com/noir-lang/sha256", tag = "v0.1.2" }
-base64 = { git =  "https://github.com/noir-lang/noir_base64", tag = "v0.4.0" }
-string_search = { git = "https://github.com/noir-lang/noir_string_search", tag = "v0.3.2" }
-bignum = { git = "https://github.com/noir-lang/noir-bignum", tag = "v0.6.0" }
+rsa = { git = "https://github.com/zkpassport/noir_rsa", tag = "saleel/sha-version" }
+sha256 = { git = "https://github.com/noir-lang/sha256", tag = "main" }
+base64 = { git =  "https://github.com/noir-lang/noir_base64", tag = "v0.4.2" }
+string_search = { git = "https://github.com/noir-lang/noir_string_search", tag = "v0.3.3" }
+bignum = { git = "https://github.com/noir-lang/noir-bignum", tag = "v0.8.0" }
 # zkemail = { git = "https://github.com/zkemail/zkemail.nr", tag="v0.4.2", directory="lib" } # for partial SHA
-nodash = { git = "https://github.com/olehmisar/nodash/", tag = "v0.41.1" } # for bytes to u64
+nodash = { git = "https://github.com/saleel/nodash/", tag = "main" } # for bytes to u64
