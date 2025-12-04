@@ -10,7 +10,7 @@
 ## Version compatibility
 
 - For Noir v1.0.0-beta.3 and below, use version `v0.4.4` of this library.
-- For Noir v1.0.0-beta.4 and above, use version `v0.5.0` of this library.
+- For Noir v1.0.0-beta.4 and above, use version `v0.5.1+` of this library.
 
 
 ### How it works
